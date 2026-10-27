@@ -9,6 +9,7 @@
 @property (nonatomic, weak) UIView *view;
 @property (nonatomic, strong) CAGradientLayer *gradient;   // 流动渐变背景
 @property (nonatomic, strong) NSMutableArray<CALayer *> *fishLayers;  // 鱼缸游鱼
+@property (nonatomic, strong) NSMutableArray<NSNumber *> *fishNextBubble;  // 每条鱼的吐泡倒计时
 @property (nonatomic, strong) CAEmitterLayer *burst;       // 到达粒子爆发
 @property (nonatomic, strong) CAEmitterLayer *season;      // 季节粒子
 @property (nonatomic, strong) UIColor *iconColor;          // 应用图标取色（缓存）
@@ -18,7 +19,7 @@
 @implementation AxsNotifyLiquidEffect
 @end
 
-// emoji 渲染成图片（鱼/粒子 sprite）。
+// emoji 渲染成图片（粒子 sprite）。
 static UIImage *axs_notifyliquid_emojiImage(NSString *emoji, CGFloat size) {
     UIGraphicsBeginImageContextWithOptions(CGSizeMake(size, size), NO, 0);
     NSMutableParagraphStyle *style = [NSMutableParagraphStyle new];
@@ -26,6 +27,90 @@ static UIImage *axs_notifyliquid_emojiImage(NSString *emoji, CGFloat size) {
     [emoji drawInRect:CGRectMake(0, size * 0.05, size, size * 0.9)
        withAttributes:@{NSFontAttributeName: [UIFont systemFontOfSize:size * 0.8],
                         NSParagraphStyleAttributeName: style}];
+    UIImage *img = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    return img;
+}
+
+// 手绘小鱼（渐变身体 + 尾鳍 + 背鳍 + 眼睛高光 + 条纹）——替代 emoji 的精致版本。
+static UIImage *axs_notifyliquid_fishImage(UIColor *base, CGFloat size) {
+    UIGraphicsBeginImageContextWithOptions(CGSizeMake(size, size), NO, 0);
+    CGContextRef ctx = UIGraphicsGetCurrentContext();
+    CGFloat w = size, h = size;
+
+    // 尾鳍（扇形，半透明略深）。
+    UIBezierPath *tail = [UIBezierPath bezierPath];
+    [tail moveToPoint:CGPointMake(w * 0.66, h * 0.5)];
+    [tail addQuadCurveToPoint:CGPointMake(w * 0.97, h * 0.16)
+                 controlPoint:CGPointMake(w * 0.92, h * 0.34)];
+    [tail addLineToPoint:CGPointMake(w * 0.97, h * 0.84)];
+    [tail addQuadCurveToPoint:CGPointMake(w * 0.66, h * 0.5)
+                 controlPoint:CGPointMake(w * 0.92, h * 0.66)];
+    [tail closePath];
+    [[base colorWithAlphaComponent:0.75] setFill];
+    [tail fill];
+
+    // 身体（水滴形，头尖尾圆）。
+    UIBezierPath *body = [UIBezierPath bezierPath];
+    [body moveToPoint:CGPointMake(w * 0.05, h * 0.5)];
+    [body addQuadCurveToPoint:CGPointMake(w * 0.70, h * 0.18)
+                 controlPoint:CGPointMake(w * 0.34, h * 0.10)];
+    [body addQuadCurveToPoint:CGPointMake(w * 0.70, h * 0.82)
+                 controlPoint:CGPointMake(w * 0.92, h * 0.5)];
+    [body addQuadCurveToPoint:CGPointMake(w * 0.05, h * 0.5)
+                 controlPoint:CGPointMake(w * 0.34, h * 0.90)];
+    [body closePath];
+    // 竖向渐变（上亮下深）。
+    CGFloat r = 0, g = 0, b = 0, a = 1;
+    [base getRed:&r green:&g blue:&b alpha:&a];
+    CGFloat topR = (CGFloat)fmin(1.0, r * 1.25 + 0.08);
+    CGFloat topG = (CGFloat)fmin(1.0, g * 1.25 + 0.08);
+    CGFloat topB = (CGFloat)fmin(1.0, b * 1.25 + 0.08);
+    CGFloat comps[] = {topR, topG, topB, 1, (CGFloat)(r * 0.8), (CGFloat)(g * 0.8), (CGFloat)(b * 0.8), 1};
+    CGFloat locs[] = {0, 1};
+    CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
+    CGGradientRef grad = CGGradientCreateWithColorComponents(space, comps, locs, 2);
+    CGContextSaveGState(ctx);
+    [body addClip];
+    CGContextDrawLinearGradient(ctx, grad, CGPointMake(0, h * 0.15), CGPointMake(0, h * 0.85), 0);
+    CGContextRestoreGState(ctx);
+    CGGradientRelease(grad);
+    CGColorSpaceRelease(space);
+
+    // 背鳍（小三角）。
+    UIBezierPath *fin = [UIBezierPath bezierPath];
+    [fin moveToPoint:CGPointMake(w * 0.40, h * 0.22)];
+    [fin addQuadCurveToPoint:CGPointMake(w * 0.60, h * 0.16)
+                 controlPoint:CGPointMake(w * 0.54, h * 0.02)];
+    [fin addQuadCurveToPoint:CGPointMake(w * 0.50, h * 0.26)
+                 controlPoint:CGPointMake(w * 0.58, h * 0.20)];
+    [fin closePath];
+    [[base colorWithAlphaComponent:0.9] setFill];
+    [fin fill];
+
+    // 条纹（两道浅弧）。
+    [[UIColor colorWithWhite:1 alpha:0.28] setStroke];
+    for (int s = 0; s < 2; s++) {
+        UIBezierPath *stripe = [UIBezierPath bezierPath];
+        CGFloat sx = w * (0.42 + 0.16 * s);
+        [stripe moveToPoint:CGPointMake(sx, h * 0.24)];
+        [stripe addQuadCurveToPoint:CGPointMake(sx, h * 0.76)
+                      controlPoint:CGPointMake(sx + w * 0.12, h * 0.5)];
+        stripe.lineWidth = w * 0.045;
+        stripe.lineCapStyle = kCGLineCapRound;
+        [stripe stroke];
+    }
+
+    // 眼睛（白 + 瞳孔 + 高光）。
+    CGRect eyeRect = CGRectMake(w * 0.20, h * 0.38, w * 0.17, h * 0.17);
+    [[UIColor whiteColor] setFill];
+    [[UIBezierPath bezierPathWithOvalInRect:eyeRect] fill];
+    [[UIColor colorWithWhite:0.08 alpha:1] setFill];
+    [[UIBezierPath bezierPathWithOvalInRect:CGRectInset(eyeRect, w * 0.042, h * 0.042)] fill];
+    [[UIColor whiteColor] setFill];
+    [[UIBezierPath bezierPathWithOvalInRect:
+      CGRectMake(eyeRect.origin.x + w * 0.05, eyeRect.origin.y + h * 0.05, w * 0.04, h * 0.04)] fill];
+
     UIImage *img = UIGraphicsGetImageFromCurrentImageContext();
     UIGraphicsEndImageContext();
     return img;
@@ -154,18 +239,26 @@ static UIImageView *axs_notifyliquid_findIconView(UIView *view, int depth) {
     [view.layer addSublayer:gradient];
     effect.gradient = gradient;
 
-    // 鱼缸游鱼：预建 8 条（上限），tick 按 fish_count 显示前 N 条。
+    // 鱼缸游鱼：手绘小鱼 5 色（金橙/青蓝/粉/紫/绿），预建 8 条上限，tick 按 fish_count 显示前 N 条。
     effect.fishLayers = [NSMutableArray array];
-    NSArray<NSString *> *fishEmoji = @[@"🐟", @"🐠", @"🐡", @"🐟", @"🐠", @"🐡", @"🐟", @"🐠"];
+    effect.fishNextBubble = [NSMutableArray array];
+    NSArray<UIColor *> *palette = @[
+        [UIColor colorWithRed:1.00 green:0.62 blue:0.21 alpha:1],   // 金橙
+        [UIColor colorWithRed:0.25 green:0.72 blue:0.85 alpha:1],   // 青蓝
+        [UIColor colorWithRed:1.00 green:0.45 blue:0.62 alpha:1],   // 粉
+        [UIColor colorWithRed:0.66 green:0.42 blue:0.90 alpha:1],   // 紫
+        [UIColor colorWithRed:0.36 green:0.82 blue:0.50 alpha:1],   // 绿
+    ];
     for (NSInteger i = 0; i < 8; i++) {
         CALayer *fish = [CALayer layer];
         fish.opacity = 0;
         fish.zPosition = 6;   // 背景之上、渐变之下
         [view.layer addSublayer:fish];
         [effect.fishLayers addObject:fish];
-        // sprite 用中等尺寸渲染（2x 保真），实际显示大小由 bounds + fish_size 控制。
-        UIImage *img = axs_notifyliquid_emojiImage(fishEmoji[(NSUInteger)i], 40.0);
+        // sprite 高分辨率渲染（矢量小鱼），实际显示大小由 bounds + fish_size 控制。
+        UIImage *img = axs_notifyliquid_fishImage(palette[(NSUInteger)i % palette.count], 64.0);
         fish.contents = (__bridge id)img.CGImage;
+        [effect.fishNextBubble addObject:@(1.0 + (i % 5) * 0.6)];
     }
 
     // 应用图标取色（按 App 专属渐变色，attach 采样一次）。
@@ -492,6 +585,42 @@ static UIImageView *axs_notifyliquid_findIconView(UIView *view, int depth) {
             CGFloat fishY = (CGFloat)(cos(phase * 0.7) * 7.0) + b.size.height * (0.40 + 0.09 * (fi % 3));
             fish.position = CGPointMake(fishX, fishY);
             fish.transform = cos(phase) < 0 ? CATransform3DMakeScale(-1, 1, 1) : CATransform3DIdentity;
+
+            // 鱼吐泡泡：倒计时到 0 时从嘴边冒一个泡泡，上浮渐隐后自清。
+            if (fi < (NSInteger)e.fishNextBubble.count) {
+                double remain = [e.fishNextBubble[(NSUInteger)fi] doubleValue] - (link.duration > 0 ? link.duration : 1.0 / 30.0);
+                if (remain <= 0) {
+                    remain = 1.4 + ((double)arc4random() / UINT32_MAX) * 1.8;
+                    CGFloat bs = (CGFloat)(3.5 + fishSize * 2.5);
+                    CALayer *bub = [CALayer layer];
+                    bub.bounds = CGRectMake(0, 0, bs, bs);
+                    bub.cornerRadius = bs / 2.0;
+                    bub.borderWidth = 1.1;
+                    bub.borderColor = [UIColor colorWithWhite:1 alpha:0.7].CGColor;
+                    bub.backgroundColor = [UIColor colorWithWhite:1 alpha:0.16].CGColor;
+                    CGFloat dir = cos(phase) < 0 ? -1 : 1;
+                    bub.position = CGPointMake(fish.position.x + dir * displaySize * 0.42,
+                                               fish.position.y - displaySize * 0.12);
+                    bub.zPosition = 7;
+                    [v.layer addSublayer:bub];
+                    CABasicAnimation *rise = [CABasicAnimation animationWithKeyPath:@"position.y"];
+                    rise.fromValue = @(bub.position.y);
+                    rise.toValue = @(bub.position.y - 42);
+                    CABasicAnimation *bfade = [CABasicAnimation animationWithKeyPath:@"opacity"];
+                    bfade.fromValue = @0.9;
+                    bfade.toValue = @0.0;
+                    CAAnimationGroup *bg = [CAAnimationGroup animation];
+                    bg.animations = @[rise, bfade];
+                    bg.duration = 2.2;
+                    bg.removedOnCompletion = YES;
+                    [bub addAnimation:bg forKey:@"axs_bubble_rise"];
+                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.3 * NSEC_PER_SEC)),
+                                   dispatch_get_main_queue(), ^{
+                        [bub removeFromSuperlayer];
+                    });
+                }
+                e.fishNextBubble[(NSUInteger)fi] = @(remain);
+            }
         }
 
         // 季节粒子：emoji 飘落（关/❄️/🌸/🍂/⭐/❤️/自动/自定义，大小可调）。
