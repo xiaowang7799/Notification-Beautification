@@ -791,6 +791,8 @@ static NSUInteger axs_notifyliquid_styleSignature(AxsNotifyLiquidConfig *config,
     double gOpacity = [config axs_notifyliquid_gradientOpacity];
     double hue1 = [config axs_notifyliquid_gradientHue1];
     double hue2 = [config axs_notifyliquid_gradientHue2];
+    double nScale = [config axs_notifyliquid_notifyScale];
+    double tiltI = [config axs_notifyliquid_tiltIntensity];
     // 低电量保护：降粒子密度、降吐泡频率、关充电特效。
     BOOL lowPower = [config axs_notifyliquid_lowPowerGuard]
                     && [NSProcessInfo processInfo].isLowPowerModeEnabled;
@@ -814,6 +816,17 @@ static NSUInteger axs_notifyliquid_styleSignature(AxsNotifyLiquidConfig *config,
             [e.iconGlow removeFromSuperlayer];
             [self.effects removeObjectAtIndex:(NSUInteger)i];
             continue;
+        }
+
+        // 通知缩放 + 3D 倾斜：逐帧重施（系统布局会改写 transform，一次性施加会被覆盖
+        // —— "通知大小失效" 的根因）。每帧一次 layer 写，便宜。
+        {
+            CATransform3D tt = CATransform3DIdentity;
+            if (tiltI > 0) {
+                tt.m34 = -1.0f / 500.0f;
+                tt = CATransform3DRotate(tt, (CGFloat)(0.10 * tiltI), 1, 0, 0);
+            }
+            v.layer.transform = CATransform3DScale(tt, (CGFloat)nScale, (CGFloat)nScale, 1.0);
         }
 
         // 流动渐变：配色来源（手动双色 / 应用图标取色 / 壁纸取色）+ 色相漂移 + 位点往复。
@@ -1068,8 +1081,10 @@ static NSUInteger axs_notifyliquid_styleSignature(AxsNotifyLiquidConfig *config,
     [CATransaction commit];
 
     if (self.effects.count == 0) { [self axs_notifyliquid_stopLink]; return; }
-    // 全关：停表省电（配置变更通知 / 新通知挂载会自动重启）。
-    if (!gradientOn && !fishOn && !particleOn && !charging) {
+    // 全关且无缩放/倾斜：停表省电（配置变更通知 / 新通知挂载会自动重启）。
+    // 缩放/倾斜必须保持 tick 存活——系统随时改写 transform，停表就会被覆盖（大小失效根因）。
+    BOOL transformActive = (fabs(nScale - 1.0) > 0.001) || (tiltI > 0.001);
+    if (!gradientOn && !fishOn && !particleOn && !charging && !transformActive) {
         [self axs_notifyliquid_stopLink];
         return;
     }
