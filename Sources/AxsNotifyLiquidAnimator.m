@@ -666,8 +666,15 @@ static UIImageView *axs_notifyliquid_findIconView(UIView *view, int depth) {
             e.season.emitterSize = CGSizeMake(v.bounds.size.width, 3.0);
             e.season.opacity = 0.85f;
             NSString *emoji = nil;
+            UIImage *spriteImg = nil;
             NSInteger styleKey = pStyle;
-            if (pStyle == 7) {
+            if (pStyle == 8) {
+                // 自定义 PNG：从路径加载（找不到回退 ✨）。
+                NSString *path = [config axs_notifyliquid_particlePng];
+                spriteImg = [UIImage imageWithContentsOfFile:path];
+                styleKey = 8000 + (NSInteger)((NSUInteger)[path hash] % 100000);
+                if (!spriteImg) emoji = @"✨";
+            } else if (pStyle == 7) {
                 // 自定义：文本按 emoji 拆分。
                 NSString *custom = [config axs_notifyliquid_particleCustom];
                 NSMutableArray<NSString *> *parts = [NSMutableArray array];
@@ -691,7 +698,7 @@ static UIImageView *axs_notifyliquid_findIconView(UIView *view, int depth) {
             }
             if (e.lastParticleKey != styleKey) {
                 e.lastParticleKey = styleKey;
-                UIImage *sprite = axs_notifyliquid_emojiImage(emoji, 24.0);
+                UIImage *sprite = spriteImg ?: axs_notifyliquid_emojiImage(emoji, 24.0);
                 CAEmitterCell *pCell = [CAEmitterCell emitterCell];
                 pCell.contents = (__bridge id)sprite.CGImage;
                 pCell.birthRate = 3.5f;

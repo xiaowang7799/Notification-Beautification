@@ -127,7 +127,7 @@ static BOOL axs_notifyliquid_bool(id value, BOOL def) {
     return axs_notifyliquid_bool([self axs_notifyliquid_valueForKey:@"dissolve_on" defaultValue:nil], NO);
 }
 - (NSInteger)axs_notifyliquid_particleStyle {
-    double d = axs_notifyliquid_clamped([self axs_notifyliquid_valueForKey:@"particle_style" defaultValue:nil], 0.0, 0.0, 7.0);
+    double d = axs_notifyliquid_clamped([self axs_notifyliquid_valueForKey:@"particle_style" defaultValue:nil], 0.0, 0.0, 8.0);
     return (NSInteger)d;
 }
 - (double)axs_notifyliquid_particleSize {
@@ -136,6 +136,10 @@ static BOOL axs_notifyliquid_bool(id value, BOOL def) {
 - (NSString *)axs_notifyliquid_particleCustom {
     id v = [self axs_notifyliquid_valueForKey:@"particle_custom" defaultValue:nil];
     return [v isKindOfClass:[NSString class]] ? v : @"✨";
+}
+- (NSString *)axs_notifyliquid_particlePng {
+    id v = [self axs_notifyliquid_valueForKey:@"particle_png" defaultValue:nil];
+    return [v isKindOfClass:[NSString class]] ? v : @"/var/mobile/Documents/particle.png";
 }
 
 - (void)dealloc {

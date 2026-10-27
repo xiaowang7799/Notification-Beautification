@@ -39,8 +39,29 @@
         _axs_field.text = [value isKindOfClass:[NSString class]] ? value : @"";
         NSString *placeholder = [specifier propertyForKey:@"placeholder"];
         _axs_field.placeholder = placeholder.length ? placeholder : @"输入…";
+
+        // filza = YES：点左侧标签直接跳 Filza 打开当前路径。
+        if ([[specifier propertyForKey:@"filza"] boolValue]) {
+            self.textLabel.userInteractionEnabled = YES;
+            UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc]
+                initWithTarget:self action:@selector(axs_openInFilza)];
+            [self.textLabel addGestureRecognizer:tap];
+        }
     }
     return self;
+}
+
+- (void)axs_openInFilza {
+    NSString *path = self.axs_field.text.length ? self.axs_field.text
+        : [self.specifier propertyForKey:@"default"];
+    if (path.length == 0) return;
+    // Filza 网址方案：filza:///绝对路径
+    NSString *urlString = [@"filza://" stringByAppendingString:
+        [path hasPrefix:@"/"] ? path : [@"/" stringByAppendingString:path]];
+    NSURL *url = [NSURL URLWithString:urlString];
+    if (url) {
+        [[UIApplication sharedApplication] openURL:url options:@{} completionHandler:nil];
+    }
 }
 
 - (void)layoutSubviews {

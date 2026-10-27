@@ -30,10 +30,12 @@
 - (BOOL)axs_notifyliquid_burstOn;
 - (double)axs_notifyliquid_burstIntensity;
 - (BOOL)axs_notifyliquid_dissolveOn;
-// 粒子特效：0=关 1=❄️ 2=🌸 3=🍂 4=⭐ 5=❤️ 6=自动 7=自定义。
+// 粒子特效：0=关 1=❄️ 2=🌸 3=🍂 4=⭐ 5=❤️ 6=自动 7=自定义emoji 8=自定义PNG。
 - (NSInteger)axs_notifyliquid_particleStyle;
 - (double)axs_notifyliquid_particleSize;
 - (NSString *)axs_notifyliquid_particleCustom;
+// 自定义 PNG 路径（style=8 时加载；如 /var/mobile/Documents/particle.png）。
+- (NSString *)axs_notifyliquid_particlePng;
 // Generic accessors.
 - (id)axs_notifyliquid_valueForKey:(NSString *)key defaultValue:(id)defaultValue;
 - (void)axs_notifyliquid_reload;
