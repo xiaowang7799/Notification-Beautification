@@ -829,8 +829,7 @@ static UIImageView *axs_notifyliquid_findIconView(UIView *view, int depth) {
                 for (UIImage *sp in sprites) {
                     CAEmitterCell *pCell = [CAEmitterCell emitterCell];
                     pCell.contents = (__bridge id)sp.CGImage;
-                    // 独立随机种子：各通知发射图案不同步。
-                    pCell.seed = arc4random();
+                    // 寿命/速度随机抖动：各通知发射图案不同步。
                     pCell.lifetime = 4.6f + ((float)arc4random() / UINT32_MAX) * 1.2f;
                     pCell.velocity = 28.0f + ((float)arc4random() / UINT32_MAX) * 10.0f;
                     pCell.velocityRange = 14.0f;
