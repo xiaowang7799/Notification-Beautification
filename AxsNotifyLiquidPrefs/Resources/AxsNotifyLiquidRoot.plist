@@ -173,6 +173,30 @@
         </dict>
         <dict>
             <key>cell</key><string>PSSwitchCell</string>
+            <key>label</key><string>色散边缘（彩虹分离）</string>
+            <key>key</key><string>edge_chroma</string>
+            <key>defaults</key><string>com.axs.notifyliquid</string>
+            <key>default</key><false/>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSSwitchCell</string>
+            <key>label</key><string>内发光</string>
+            <key>key</key><string>inner_glow_on</string>
+            <key>defaults</key><string>com.axs.notifyliquid</string>
+            <key>default</key><false/>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSTitleValueCell</string>
+            <key>cellClass</key><string>AxsNotifyLiquidSliderCell</string>
+            <key>label</key><string>内发光强度</string>
+            <key>key</key><string>inner_glow_intensity</string>
+            <key>defaults</key><string>com.axs.notifyliquid</string>
+            <key>default</key><real>0.5</real>
+            <key>min</key><real>0.1</real>
+            <key>max</key><real>1.0</real>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSSwitchCell</string>
             <key>label</key><string>阴影</string>
             <key>key</key><string>shadow_on</string>
             <key>defaults</key><string>com.axs.notifyliquid</string>

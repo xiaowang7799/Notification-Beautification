@@ -11,6 +11,10 @@
 @property (nonatomic, strong) CAGradientLayer *glass;      // 流动高光（shimmer/pulse/breathe）
 @property (nonatomic, strong) CAGradientLayer *tint;       // 材质着色（清透/磨砂/着色/暗色）
 @property (nonatomic, strong) CAShapeLayer *edge;          // 边缘高光
+@property (nonatomic, strong) CAShapeLayer *chromaR;       // 色散：红偏移
+@property (nonatomic, strong) CAShapeLayer *chromaG;       // 色散：绿偏移
+@property (nonatomic, strong) CAShapeLayer *chromaB;       // 色散：蓝偏移
+@property (nonatomic, strong) CAGradientLayer *innerGlow;  // 内发光
 @end
 @implementation AxsNotifyLiquidEffect
 @end
@@ -107,6 +111,46 @@
     [view.layer addSublayer:edge];
     effect.edge = edge;
 
+    // 色散边缘（chromatic aberration）：红/绿/蓝三描边微偏移，呈现彩虹分离。
+    NSArray<NSNumber *> *chromaOffsets = @[@(-1.0), @(0.0), @(1.0)];
+    NSArray<UIColor *> *chromaColors = @[
+        [UIColor colorWithRed:1 green:0.25 blue:0.25 alpha:1],
+        [UIColor colorWithRed:0.25 green:1 blue:0.45 alpha:1],
+        [UIColor colorWithRed:0.3 green:0.5 blue:1 alpha:1],
+    ];
+    CAShapeLayer *chromaLayers[3];
+    for (int i = 0; i < 3; i++) {
+        CAShapeLayer *cl = [CAShapeLayer layer];
+        cl.frame = view.bounds;
+        cl.fillColor = [UIColor clearColor].CGColor;
+        cl.lineWidth = 1.2;
+        cl.strokeColor = chromaColors[i].CGColor;
+        cl.opacity = 0;
+        cl.zPosition = 12;
+        cl.affineTransform = CGAffineTransformMakeTranslation(chromaOffsets[i].floatValue, 0);
+        [view.layer addSublayer:cl];
+        chromaLayers[i] = cl;
+    }
+    effect.chromaR = chromaLayers[0];
+    effect.chromaG = chromaLayers[1];
+    effect.chromaB = chromaLayers[2];
+
+    // 内发光（inner glow）：径向渐变中心透明、边缘柔白光。
+    CAGradientLayer *innerGlow = [CAGradientLayer layer];
+    innerGlow.frame = view.bounds;
+    innerGlow.cornerRadius = radius;
+    innerGlow.type = kCAGradientLayerRadial;
+    innerGlow.startPoint = CGPointMake(0.5, 0.5);
+    innerGlow.endPoint = CGPointMake(1.0, 1.0);
+    innerGlow.colors = @[(id)[UIColor clearColor].CGColor,
+                         (id)[UIColor clearColor].CGColor,
+                         (id)[UIColor colorWithWhite:1 alpha:0.25].CGColor];
+    innerGlow.locations = @[@0, @0.6, @1];
+    innerGlow.opacity = 0;
+    innerGlow.zPosition = 13;
+    [view.layer addSublayer:innerGlow];
+    effect.innerGlow = innerGlow;
+
     [self.effects addObject:effect];
 
     // 液态弹性出现动画（果冻弹跳）。
@@ -137,6 +181,10 @@
             [e.glass removeFromSuperlayer];
             [e.tint removeFromSuperlayer];
             [e.edge removeFromSuperlayer];
+            [e.chromaR removeFromSuperlayer];
+            [e.chromaG removeFromSuperlayer];
+            [e.chromaB removeFromSuperlayer];
+            [e.innerGlow removeFromSuperlayer];
             [self.effects removeObjectAtIndex:(NSUInteger)i];
         }
     }
@@ -159,6 +207,13 @@
         e.tint.cornerRadius = radius;
         e.edge.frame = v.bounds;
         e.edge.path = [UIBezierPath bezierPathWithRoundedRect:v.bounds cornerRadius:radius].CGPath;
+        // 色散三描边共用圆角矩形 path（各自 affineTransform 微偏移）。
+        CGPathRef roundPath = [UIBezierPath bezierPathWithRoundedRect:v.bounds cornerRadius:radius].CGPath;
+        e.chromaR.path = roundPath;
+        e.chromaG.path = roundPath;
+        e.chromaB.path = roundPath;
+        e.innerGlow.frame = v.bounds;
+        e.innerGlow.cornerRadius = radius;
         // 通知缩放（transform，布局后重施即自愈——frame 由系统管，transform 归我们）。
         double s = [config axs_notifyliquid_notifyScale];
         v.layer.transform = CATransform3DMakeScale(s, s, 1.0);
@@ -209,6 +264,10 @@
             [e.glass removeFromSuperlayer];
             [e.tint removeFromSuperlayer];
             [e.edge removeFromSuperlayer];
+            [e.chromaR removeFromSuperlayer];
+            [e.chromaG removeFromSuperlayer];
+            [e.chromaB removeFromSuperlayer];
+            [e.innerGlow removeFromSuperlayer];
             [self.effects removeObjectAtIndex:(NSUInteger)i];
             continue;
         }
@@ -271,12 +330,32 @@
             }
 
             // 边缘高光（一圈亮边，随高光模式轻微明暗呼吸）。
+            BOOL chromaOn = [config axs_notifyliquid_edgeChroma];
             if ([config axs_notifyliquid_edgeOn]) {
                 double ei = [config axs_notifyliquid_edgeIntensity];
-                e.edge.opacity = 1.0f;
+                e.edge.opacity = chromaOn ? 0 : 1.0f;   // 色散模式下白色边让位给彩边
                 e.edge.strokeColor = [UIColor colorWithWhite:1 alpha:(CGFloat)(0.35 + 0.35 * ei)].CGColor;
             } else if (e.edge.opacity != 0) {
                 e.edge.opacity = 0;
+            }
+
+            // 色散边缘：RGB 三描边微偏移（Liquid Glass 标志性彩虹分离）。
+            if (chromaOn && [config axs_notifyliquid_edgeOn]) {
+                float chromaAlpha = (float)(0.35 + 0.35 * [config axs_notifyliquid_edgeIntensity]);
+                e.chromaR.opacity = chromaAlpha;
+                e.chromaG.opacity = chromaAlpha;
+                e.chromaB.opacity = chromaAlpha;
+            } else if (e.chromaR.opacity != 0) {
+                e.chromaR.opacity = 0;
+                e.chromaG.opacity = 0;
+                e.chromaB.opacity = 0;
+            }
+
+            // 内发光：玻璃内侧边缘柔光。
+            if ([config axs_notifyliquid_innerGlowOn]) {
+                e.innerGlow.opacity = (float)(0.8 * [config axs_notifyliquid_innerGlowIntensity]);
+            } else if (e.innerGlow.opacity != 0) {
+                e.innerGlow.opacity = 0;
             }
 
             // 阴影（LiquidGlassKit 的 shadow）。
@@ -293,6 +372,8 @@
             if (e.glass.opacity != 0) e.glass.opacity = 0;
             if (e.tint.opacity != 0) e.tint.opacity = 0;
             if (e.edge.opacity != 0) e.edge.opacity = 0;
+            if (e.chromaR.opacity != 0) { e.chromaR.opacity = 0; e.chromaG.opacity = 0; e.chromaB.opacity = 0; }
+            if (e.innerGlow.opacity != 0) e.innerGlow.opacity = 0;
             if (v.layer.shadowOpacity != 0) v.layer.shadowOpacity = 0;
         }
     }

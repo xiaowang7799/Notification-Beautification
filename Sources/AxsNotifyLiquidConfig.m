@@ -111,6 +111,15 @@ static BOOL axs_notifyliquid_bool(id value, BOOL def) {
 - (double)axs_notifyliquid_edgeIntensity {
     return axs_notifyliquid_clamped([self axs_notifyliquid_valueForKey:@"edge_intensity" defaultValue:nil], 0.6, 0.1, 1.0);
 }
+- (BOOL)axs_notifyliquid_edgeChroma {
+    return axs_notifyliquid_bool([self axs_notifyliquid_valueForKey:@"edge_chroma" defaultValue:nil], NO);
+}
+- (BOOL)axs_notifyliquid_innerGlowOn {
+    return axs_notifyliquid_bool([self axs_notifyliquid_valueForKey:@"inner_glow_on" defaultValue:nil], NO);
+}
+- (double)axs_notifyliquid_innerGlowIntensity {
+    return axs_notifyliquid_clamped([self axs_notifyliquid_valueForKey:@"inner_glow_intensity" defaultValue:nil], 0.5, 0.1, 1.0);
+}
 - (BOOL)axs_notifyliquid_shadowOn {
     return axs_notifyliquid_bool([self axs_notifyliquid_valueForKey:@"shadow_on" defaultValue:nil], NO);
 }

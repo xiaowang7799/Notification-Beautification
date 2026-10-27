@@ -24,6 +24,11 @@
 - (double)axs_notifyliquid_glassTintHue;
 - (BOOL)axs_notifyliquid_edgeOn;
 - (double)axs_notifyliquid_edgeIntensity;
+// 色散边缘（chromatic aberration）：红/绿/蓝三色描边微偏移——Liquid Glass 标志性细节。
+- (BOOL)axs_notifyliquid_edgeChroma;
+// 内发光（inner glow）：玻璃内侧边缘柔光。
+- (BOOL)axs_notifyliquid_innerGlowOn;
+- (double)axs_notifyliquid_innerGlowIntensity;
 - (BOOL)axs_notifyliquid_shadowOn;
 - (double)axs_notifyliquid_shadowIntensity;
 // 高光动画：0=关 1=shimmer 流光扫过 2=pulse 脉冲 3=breathe 呼吸。
