@@ -2,7 +2,11 @@
 #import "AxsNotifyLiquidConfig.h"
 #import <QuartzCore/QuartzCore.h>
 #import <UIKit/UIKit.h>
+#import <objc/runtime.h>
 #import <math.h>
+
+// 视图是否已播过入场/爆发（滚动复用不重播）。
+static const void *kAxsLiquidSeenKey = &kAxsLiquidSeenKey;
 
 // 单条通知的效果容器（视图弱引用，通知消失自动失效）。
 @interface AxsNotifyLiquidEffect : NSObject
@@ -32,13 +36,19 @@ static UIImage *axs_notifyliquid_emojiImage(NSString *emoji, CGFloat size) {
     return img;
 }
 
-// 手绘小鱼（渐变身体 + 尾鳍 + 背鳍 + 眼睛高光 + 条纹）——替代 emoji 的精致版本。
+// 透明彩色玻璃鱼（半透明渐变身体 + 亮边描线 + 内高光 + 条纹）。
 static UIImage *axs_notifyliquid_fishImage(UIColor *base, CGFloat size) {
     UIGraphicsBeginImageContextWithOptions(CGSizeMake(size, size), NO, 0);
     CGContextRef ctx = UIGraphicsGetCurrentContext();
     CGFloat w = size, h = size;
 
-    // 尾鳍（扇形，半透明略深）。
+    CGFloat r = 0, g = 0, b = 0, a = 1;
+    [base getRed:&r green:&g blue:&b alpha:&a];
+    CGFloat topR = (CGFloat)fmin(1.0, r * 1.3 + 0.15);
+    CGFloat topG = (CGFloat)fmin(1.0, g * 1.3 + 0.15);
+    CGFloat topB = (CGFloat)fmin(1.0, b * 1.3 + 0.15);
+
+    // 尾鳍（半透明扇形 + 亮边）。
     UIBezierPath *tail = [UIBezierPath bezierPath];
     [tail moveToPoint:CGPointMake(w * 0.66, h * 0.5)];
     [tail addQuadCurveToPoint:CGPointMake(w * 0.97, h * 0.16)
@@ -47,10 +57,13 @@ static UIImage *axs_notifyliquid_fishImage(UIColor *base, CGFloat size) {
     [tail addQuadCurveToPoint:CGPointMake(w * 0.66, h * 0.5)
                  controlPoint:CGPointMake(w * 0.92, h * 0.66)];
     [tail closePath];
-    [[base colorWithAlphaComponent:0.75] setFill];
+    [[base colorWithAlphaComponent:0.38] setFill];
     [tail fill];
+    [[base colorWithAlphaComponent:0.75] setStroke];
+    tail.lineWidth = w * 0.022;
+    [tail stroke];
 
-    // 身体（水滴形，头尖尾圆）。
+    // 身体（水滴形，半透明渐变：上亮下深）。
     UIBezierPath *body = [UIBezierPath bezierPath];
     [body moveToPoint:CGPointMake(w * 0.05, h * 0.5)];
     [body addQuadCurveToPoint:CGPointMake(w * 0.70, h * 0.18)
@@ -60,24 +73,22 @@ static UIImage *axs_notifyliquid_fishImage(UIColor *base, CGFloat size) {
     [body addQuadCurveToPoint:CGPointMake(w * 0.05, h * 0.5)
                  controlPoint:CGPointMake(w * 0.34, h * 0.90)];
     [body closePath];
-    // 竖向渐变（上亮下深）。
-    CGFloat r = 0, g = 0, b = 0, a = 1;
-    [base getRed:&r green:&g blue:&b alpha:&a];
-    CGFloat topR = (CGFloat)fmin(1.0, r * 1.25 + 0.08);
-    CGFloat topG = (CGFloat)fmin(1.0, g * 1.25 + 0.08);
-    CGFloat topB = (CGFloat)fmin(1.0, b * 1.25 + 0.08);
-    CGFloat comps[] = {topR, topG, topB, 1, (CGFloat)(r * 0.8), (CGFloat)(g * 0.8), (CGFloat)(b * 0.8), 1};
+    CGFloat comps[] = {topR, topG, topB, 0.82f, (CGFloat)(r * 0.85), (CGFloat)(g * 0.85), (CGFloat)(b * 0.85), 0.38f};
     CGFloat locs[] = {0, 1};
     CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
     CGGradientRef grad = CGGradientCreateWithColorComponents(space, comps, locs, 2);
     CGContextSaveGState(ctx);
     [body addClip];
-    CGContextDrawLinearGradient(ctx, grad, CGPointMake(0, h * 0.15), CGPointMake(0, h * 0.85), 0);
+    CGContextDrawLinearGradient(ctx, grad, CGPointMake(0, h * 0.12), CGPointMake(0, h * 0.88), 0);
     CGContextRestoreGState(ctx);
     CGGradientRelease(grad);
     CGColorSpaceRelease(space);
+    // 亮边描线（玻璃轮廓）。
+    [[base colorWithAlphaComponent:0.95] setStroke];
+    body.lineWidth = w * 0.028;
+    [body stroke];
 
-    // 背鳍（小三角）。
+    // 背鳍（半透明）。
     UIBezierPath *fin = [UIBezierPath bezierPath];
     [fin moveToPoint:CGPointMake(w * 0.40, h * 0.22)];
     [fin addQuadCurveToPoint:CGPointMake(w * 0.60, h * 0.16)
@@ -85,25 +96,34 @@ static UIImage *axs_notifyliquid_fishImage(UIColor *base, CGFloat size) {
     [fin addQuadCurveToPoint:CGPointMake(w * 0.50, h * 0.26)
                  controlPoint:CGPointMake(w * 0.58, h * 0.20)];
     [fin closePath];
-    [[base colorWithAlphaComponent:0.9] setFill];
+    [[base colorWithAlphaComponent:0.45] setFill];
     [fin fill];
+    [[base colorWithAlphaComponent:0.8] setStroke];
+    fin.lineWidth = w * 0.018;
+    [fin stroke];
 
-    // 条纹（两道浅弧）。
-    [[UIColor colorWithWhite:1 alpha:0.28] setStroke];
+    // 内高光（玻璃质感：上部白色柔光）。
+    UIBezierPath *glint = [UIBezierPath bezierPathWithOvalInRect:
+        CGRectMake(w * 0.18, h * 0.22, w * 0.34, h * 0.16)];
+    [[UIColor colorWithWhite:1 alpha:0.35] setFill];
+    [glint fill];
+
+    // 条纹（浅弧）。
+    [[UIColor colorWithWhite:1 alpha:0.30] setStroke];
     for (int s = 0; s < 2; s++) {
         UIBezierPath *stripe = [UIBezierPath bezierPath];
         CGFloat sx = w * (0.42 + 0.16 * s);
-        [stripe moveToPoint:CGPointMake(sx, h * 0.24)];
-        [stripe addQuadCurveToPoint:CGPointMake(sx, h * 0.76)
+        [stripe moveToPoint:CGPointMake(sx, h * 0.26)];
+        [stripe addQuadCurveToPoint:CGPointMake(sx, h * 0.74)
                       controlPoint:CGPointMake(sx + w * 0.12, h * 0.5)];
-        stripe.lineWidth = w * 0.045;
+        stripe.lineWidth = w * 0.04;
         stripe.lineCapStyle = kCGLineCapRound;
         [stripe stroke];
     }
 
     // 眼睛（白 + 瞳孔 + 高光）。
     CGRect eyeRect = CGRectMake(w * 0.20, h * 0.38, w * 0.17, h * 0.17);
-    [[UIColor whiteColor] setFill];
+    [[UIColor colorWithWhite:1 alpha:0.92] setFill];
     [[UIBezierPath bezierPathWithOvalInRect:eyeRect] fill];
     [[UIColor colorWithWhite:0.08 alpha:1] setFill];
     [[UIBezierPath bezierPathWithOvalInRect:CGRectInset(eyeRect, w * 0.042, h * 0.042)] fill];
@@ -217,6 +237,11 @@ static UIImageView *axs_notifyliquid_findIconView(UIView *view, int depth) {
     if (!view) return;
     AxsNotifyLiquidConfig *config = [AxsNotifyLiquidConfig axs_notifyliquid_shared];
     if (![config axs_notifyliquid_isEnabled]) return;
+    // 清除残留的消散动画（滚动复用会带着"隐形"fillMode 回来，导致通知消失）。
+    [view.layer removeAnimationForKey:@"axs_liquid_dissolve"];
+    // 入场/爆发每个视图实例只播一次（滚动复用不重播）。
+    BOOL seen = [objc_getAssociatedObject(view, kAxsLiquidSeenKey) boolValue];
+    objc_setAssociatedObject(view, kAxsLiquidSeenKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     for (AxsNotifyLiquidEffect *e in self.effects) {
         if (e.view == view) {
             [self axs_notifyliquid_refreshForView:view];
@@ -308,9 +333,9 @@ static UIImageView *axs_notifyliquid_findIconView(UIView *view, int depth) {
 
     [self.effects addObject:effect];
 
-    // 出现动画（五档）：果冻弹跳 / 除雾渐显 / 挤压拉伸 / 凝胶膨胀。
+    // 出现动画（五档）：果冻弹跳 / 除雾渐显 / 挤压拉伸 / 凝胶膨胀。仅首次挂载播放。
     NSInteger appearMode = [config axs_notifyliquid_appearMode];
-    if (appearMode > 0) {
+    if (appearMode > 0 && !seen) {
         double intensity = [config axs_notifyliquid_appearIntensity];
         double s = [config axs_notifyliquid_notifyScale];
         CAAnimationGroup *group = [CAAnimationGroup animation];
@@ -365,9 +390,8 @@ static UIImageView *axs_notifyliquid_findIconView(UIView *view, int depth) {
     [self axs_notifyliquid_refreshForView:view];
     [self axs_notifyliquid_ensureLink];
 
-    // 到达粒子爆发：一次性播放。延迟 0.1s 等布局完成，按实际 bounds 中心发射
-    //（挂载瞬间 bounds 可能还是零，之前光斑会跑到左上角图标处）。
-    if ([config axs_notifyliquid_burstOn] && !effect.burstPlayed) {
+    // 到达粒子爆发：一次性播放（仅首次挂载）。延迟 0.1s 等布局完成，按实际 bounds 中心发射。
+    if ([config axs_notifyliquid_burstOn] && !effect.burstPlayed && !seen) {
         effect.burstPlayed = YES;
         double bi = [config axs_notifyliquid_burstIntensity];
         __weak AxsNotifyLiquidEffect *we = effect;
@@ -464,33 +488,28 @@ static UIImageView *axs_notifyliquid_findIconView(UIView *view, int depth) {
 - (void)axs_notifyliquid_dissolveForView:(UIView *)view {
     AxsNotifyLiquidConfig *config = [AxsNotifyLiquidConfig axs_notifyliquid_shared];
     if (![config axs_notifyliquid_isEnabled] || ![config axs_notifyliquid_dissolveOn]) return;
-    // 整体淡出 + 轻微收缩（叠加在系统划走动画上，产生"溶解"感）。
-    CAAnimationGroup *group = [CAAnimationGroup animation];
-    CABasicAnimation *fade = [CABasicAnimation animationWithKeyPath:@"opacity"];
-    fade.fromValue = @1.0;
-    fade.toValue = @0.0;
-    CABasicAnimation *shrink = [CABasicAnimation animationWithKeyPath:@"transform.scale"];
-    shrink.fromValue = @1.0;
-    shrink.toValue = @0.88;
-    group.animations = @[fade, shrink];
-    group.duration = 0.3;
-    group.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseIn];
-    group.removedOnCompletion = NO;
-    group.fillMode = kCAFillModeForwards;
-    [view.layer addAnimation:group forKey:@"axs_liquid_dissolve"];
-    // 我们的效果层同步淡出。
-    for (AxsNotifyLiquidEffect *e in self.effects) {
-        if (e.view != view) continue;
-        CABasicAnimation *lf = [CABasicAnimation animationWithKeyPath:@"opacity"];
-        lf.fromValue = @(e.gradient.opacity);
-        lf.toValue = @0.0;
-        lf.duration = 0.3;
-        lf.removedOnCompletion = NO;
-        lf.fillMode = kCAFillModeForwards;
-        [e.gradient addAnimation:lf forKey:@"axs_dissolve"];
-        for (CALayer *fish in e.fishLayers) [fish addAnimation:lf forKey:@"axs_dissolve"];
-        return;
-    }
+    // 延迟 0.15s：滚动复用的 Cell 通常很快回到窗口（取消淡出）；
+    // 真正被划走/清除的视图此时已离场或正在离场，淡出叠加在系统动画上。
+    __weak UIView *weakView = view;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.15 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        UIView *v = weakView;
+        if (!v || v.window) return;   // 回到窗口 = 滚动复用，取消消散
+        // 整体淡出 + 轻微收缩。
+        CAAnimationGroup *group = [CAAnimationGroup animation];
+        CABasicAnimation *fade = [CABasicAnimation animationWithKeyPath:@"opacity"];
+        fade.fromValue = @1.0;
+        fade.toValue = @0.0;
+        CABasicAnimation *shrink = [CABasicAnimation animationWithKeyPath:@"transform.scale"];
+        shrink.fromValue = @1.0;
+        shrink.toValue = @0.88;
+        group.animations = @[fade, shrink];
+        group.duration = 0.25;
+        group.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseIn];
+        group.removedOnCompletion = NO;
+        group.fillMode = kCAFillModeForwards;
+        [v.layer addAnimation:group forKey:@"axs_liquid_dissolve"];
+    });
 }
 
 #pragma mark - 动画驱动（30fps，仅有效果时运行）
@@ -568,12 +587,14 @@ static UIImageView *axs_notifyliquid_findIconView(UIView *view, int depth) {
                 c2 = [UIColor colorWithHue:(CGFloat)fmod(hue2 + t * 0.04, 1.0) saturation:0.75 brightness:1 alpha:1];
                 cm = [UIColor colorWithHue:(CGFloat)fmod((hue1 + hue2) / 2.0 + t * 0.04, 1.0) saturation:0.75 brightness:1 alpha:1];
             }
-            e.gradient.colors = @[(id)c1.CGColor, (id)cm.CGColor, (id)c2.CGColor];
-            double travel = (sin(t * gSpeed * 2.0) + 1.0) / 2.0;   // 0..1 往复
-            double span = 0.25;
-            double l0 = fmax(0.0, fmin(1.0, travel * (1.0 - span)));
-            double l2 = fmax(0.0, fmin(1.0, l0 + span));
-            e.gradient.locations = @[@(l0), @((l0 + l2) / 2.0), @(l2)];
+            // 流动优化：渐变轴缓慢旋转（液态感）+ 色带波浪推移（两端固定不卡顿）。
+            double ang = t * 0.12;
+            e.gradient.startPoint = CGPointMake(0.5 + 0.5 * cos(ang), 0.5 + 0.5 * sin(ang));
+            e.gradient.endPoint = CGPointMake(0.5 - 0.5 * cos(ang), 0.5 - 0.5 * sin(ang));
+            double wave = (sin(t * gSpeed * 1.8) + 1.0) / 2.0;   // 0..1
+            double w1 = 0.18 + 0.22 * wave;                       // 中间两色位置推移
+            e.gradient.locations = @[@0, @(w1), @(1.0 - w1), @1];
+            e.gradient.colors = @[(id)c1.CGColor, (id)cm.CGColor, (id)c2.CGColor, (id)cm.CGColor];
         } else if (e.gradient.opacity != 0) {
             e.gradient.opacity = 0;
         }
