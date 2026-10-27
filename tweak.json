@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "name": "NotifyLiquid",
+  "id": "notifyliquid",
+  "display_name": "液态通知",
+  "class_prefix": "AxsNotifyLiquid",
+  "symbol_prefix": "axs_notifyliquid",
+  "package": "com.axs.notifyliquid",
+  "bundle": "com.apple.springboard",
+  "sdk_version": "16.5",
+  "minimum_ios": "15.0",
+  "preferences": true,
+  "slider": true,
+  "github_actions": true
+}

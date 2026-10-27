@@ -1,0 +1,11 @@
+Package: com.axs.notifyliquid
+Name: 液态通知
+Version: 5.2.0
+Architecture: iphoneos-arm
+Description: 锁屏通知液态美化：流动渐变背景、玻璃高光、波浪边缘、弹性出现动画，通知大小可调
+Maintainer: 搞机群友:三叶草
+Author: 搞机群友:三叶草
+Section: Tweaks
+Depends: mobilesubstrate, preferenceloader
+Icon: https://raw.githubusercontent.com/xiaowang7799/NotifyLiquid/main/AxsNotifyLiquidPrefs/Resources/icon@2x.png
+Sileodepiction: https://github.com/xiaowang7799/NotifyLiquid
