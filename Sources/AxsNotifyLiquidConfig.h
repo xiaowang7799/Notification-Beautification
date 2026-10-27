@@ -18,6 +18,13 @@
 - (double)axs_notifyliquid_appearIntensity;
 // 触摸发光（touch glow）：触摸通知时渐变闪一下 + 微挤压。
 - (BOOL)axs_notifyliquid_touchGlowOn;
+// 鱼缸游鱼：每条通知背景里游动的小鱼（数量/大小可调）。
+- (BOOL)axs_notifyliquid_fishOn;
+- (NSInteger)axs_notifyliquid_fishCount;
+- (double)axs_notifyliquid_fishSize;
+// 界面净化：隐藏「通知中心」标题字、隐藏「清除所有通知」按钮。
+- (BOOL)axs_notifyliquid_hideNcTitle;
+- (BOOL)axs_notifyliquid_hideClearAll;
 // Generic accessors.
 - (id)axs_notifyliquid_valueForKey:(NSString *)key defaultValue:(id)defaultValue;
 - (void)axs_notifyliquid_reload;

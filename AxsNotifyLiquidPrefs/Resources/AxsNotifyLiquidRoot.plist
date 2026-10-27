@@ -30,6 +30,59 @@
 
         <dict>
             <key>cell</key><string>PSGroupCell</string>
+            <key>label</key><string>界面净化</string>
+            <key>footerText</key><string>隐藏 iOS 自带的「通知中心」标题文字与「清除所有通知」按钮（改完 respring 生效）。</string>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSSwitchCell</string>
+            <key>label</key><string>隐藏「通知中心」标题</string>
+            <key>key</key><string>hide_nc_title</string>
+            <key>defaults</key><string>com.axs.notifyliquid</string>
+            <key>default</key><true/>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSSwitchCell</string>
+            <key>label</key><string>隐藏「清除所有通知」按钮</string>
+            <key>key</key><string>hide_clear_all</string>
+            <key>defaults</key><string>com.axs.notifyliquid</string>
+            <key>default</key><true/>
+        </dict>
+
+        <dict>
+            <key>cell</key><string>PSGroupCell</string>
+            <key>label</key><string>鱼缸游鱼</string>
+            <key>footerText</key><string>每条通知背景里游动的小鱼，数量/大小可调。</string>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSSwitchCell</string>
+            <key>label</key><string>启用鱼缸游鱼</string>
+            <key>key</key><string>fish_on</string>
+            <key>defaults</key><string>com.axs.notifyliquid</string>
+            <key>default</key><false/>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSTitleValueCell</string>
+            <key>cellClass</key><string>AxsNotifyLiquidSliderCell</string>
+            <key>label</key><string>鱼的数量</string>
+            <key>key</key><string>fish_count</string>
+            <key>defaults</key><string>com.axs.notifyliquid</string>
+            <key>default</key><real>3</real>
+            <key>min</key><real>1</real>
+            <key>max</key><real>8</real>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSTitleValueCell</string>
+            <key>cellClass</key><string>AxsNotifyLiquidSliderCell</string>
+            <key>label</key><string>鱼的大小</string>
+            <key>key</key><string>fish_size</string>
+            <key>defaults</key><string>com.axs.notifyliquid</string>
+            <key>default</key><real>1.0</real>
+            <key>min</key><real>0.5</real>
+            <key>max</key><real>2.0</real>
+        </dict>
+
+        <dict>
+            <key>cell</key><string>PSGroupCell</string>
             <key>label</key><string>流动渐变背景</string>
             <key>footerText</key><string>双色渐变在通知背景上缓慢流动，色相可自由调。</string>
         </dict>

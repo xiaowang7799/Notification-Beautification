@@ -8,9 +8,23 @@
 @interface AxsNotifyLiquidEffect : NSObject
 @property (nonatomic, weak) UIView *view;
 @property (nonatomic, strong) CAGradientLayer *gradient;   // 流动渐变背景
+@property (nonatomic, strong) NSMutableArray<CALayer *> *fishLayers;  // 鱼缸游鱼
 @end
 @implementation AxsNotifyLiquidEffect
 @end
+
+// emoji 渲染成图片（鱼 sprite）。
+static UIImage *axs_notifyliquid_emojiImage(NSString *emoji, CGFloat size) {
+    UIGraphicsBeginImageContextWithOptions(CGSizeMake(size, size), NO, 0);
+    NSMutableParagraphStyle *style = [NSMutableParagraphStyle new];
+    style.alignment = NSTextAlignmentCenter;
+    [emoji drawInRect:CGRectMake(0, size * 0.05, size, size * 0.9)
+       withAttributes:@{NSFontAttributeName: [UIFont systemFontOfSize:size * 0.8],
+                        NSParagraphStyleAttributeName: style}];
+    UIImage *img = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    return img;
+}
 
 @interface AxsNotifyLiquidAnimator ()
 @property (nonatomic, strong) NSMutableArray<AxsNotifyLiquidEffect *> *effects;
@@ -64,6 +78,20 @@
     gradient.zPosition = 10;
     [view.layer addSublayer:gradient];
     effect.gradient = gradient;
+
+    // 鱼缸游鱼：预建 8 条（上限），tick 按 fish_count 显示前 N 条。
+    effect.fishLayers = [NSMutableArray array];
+    NSArray<NSString *> *fishEmoji = @[@"🐟", @"🐠", @"🐡", @"🐟", @"🐠", @"🐡", @"🐟", @"🐠"];
+    for (NSInteger i = 0; i < 8; i++) {
+        CALayer *fish = [CALayer layer];
+        fish.opacity = 0;
+        fish.zPosition = 6;   // 背景之上、渐变之下
+        [view.layer addSublayer:fish];
+        [effect.fishLayers addObject:fish];
+        // sprite 用中等尺寸渲染（2x 保真），实际显示大小由 bounds + fish_size 控制。
+        UIImage *img = axs_notifyliquid_emojiImage(fishEmoji[(NSUInteger)i], 40.0);
+        fish.contents = (__bridge id)img.CGImage;
+    }
 
     [self.effects addObject:effect];
 
@@ -232,6 +260,28 @@
             e.gradient.locations = @[@(l0), @((l0 + l2) / 2.0), @(l2)];
         } else if (e.gradient.opacity != 0) {
             e.gradient.opacity = 0;
+        }
+
+        // 鱼缸游鱼：前 fish_count 条可见，正弦游动 + 方向翻转（数量/大小实时生效）。
+        BOOL fishOn = [config axs_notifyliquid_fishOn];
+        NSInteger fishCount = [config axs_notifyliquid_fishCount];
+        double fishSize = [config axs_notifyliquid_fishSize];
+        for (NSInteger fi = 0; fi < (NSInteger)e.fishLayers.count; fi++) {
+            CALayer *fish = e.fishLayers[(NSUInteger)fi];
+            if (!fishOn || fi >= fishCount) {
+                if (fish.opacity != 0) fish.opacity = 0;
+                continue;
+            }
+            fish.opacity = 0.9f;
+            CGFloat displaySize = (CGFloat)(22.0 * fishSize);
+            fish.bounds = CGRectMake(0, 0, displaySize, displaySize);
+            double speed = 0.35 + (fi % 4) * 0.09;
+            double phase = t * speed + fi * 1.3;
+            CGRect b = v.bounds;
+            CGFloat fishX = (CGFloat)(sin(phase) * b.size.width * 0.32) + CGRectGetMidX(b);
+            CGFloat fishY = (CGFloat)(cos(phase * 0.7) * 7.0) + b.size.height * (0.40 + 0.09 * (fi % 3));
+            fish.position = CGPointMake(fishX, fishY);
+            fish.transform = cos(phase) < 0 ? CATransform3DMakeScale(-1, 1, 1) : CATransform3DIdentity;
         }
     }
 

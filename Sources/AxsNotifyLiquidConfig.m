@@ -100,6 +100,22 @@ static BOOL axs_notifyliquid_bool(id value, BOOL def) {
 - (BOOL)axs_notifyliquid_touchGlowOn {
     return axs_notifyliquid_bool([self axs_notifyliquid_valueForKey:@"touch_glow_on" defaultValue:nil], NO);
 }
+- (BOOL)axs_notifyliquid_fishOn {
+    return axs_notifyliquid_bool([self axs_notifyliquid_valueForKey:@"fish_on" defaultValue:nil], NO);
+}
+- (NSInteger)axs_notifyliquid_fishCount {
+    double d = axs_notifyliquid_clamped([self axs_notifyliquid_valueForKey:@"fish_count" defaultValue:nil], 3.0, 1.0, 8.0);
+    return (NSInteger)d;
+}
+- (double)axs_notifyliquid_fishSize {
+    return axs_notifyliquid_clamped([self axs_notifyliquid_valueForKey:@"fish_size" defaultValue:nil], 1.0, 0.5, 2.0);
+}
+- (BOOL)axs_notifyliquid_hideNcTitle {
+    return axs_notifyliquid_bool([self axs_notifyliquid_valueForKey:@"hide_nc_title" defaultValue:nil], YES);
+}
+- (BOOL)axs_notifyliquid_hideClearAll {
+    return axs_notifyliquid_bool([self axs_notifyliquid_valueForKey:@"hide_clear_all" defaultValue:nil], YES);
+}
 
 - (void)dealloc {
     CFNotificationCenterRemoveEveryObserver(CFNotificationCenterGetDarwinNotifyCenter(),
