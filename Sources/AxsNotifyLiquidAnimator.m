@@ -217,6 +217,24 @@ static UIImageView *axs_notifyliquid_findIconView(UIView *view, int depth) {
     return nil;
 }
 
+// 找通知的背景视图（毛玻璃/材质层）。圆角打在它身上而不是通知层，
+// 避免 masksToBounds 裁掉粒子（粒子要飘出通知边界）。
+static UIView *axs_notifyliquid_findBackgroundView(UIView *view, int depth) {
+    if (depth > 5) return nil;
+    for (UIView *sub in view.subviews) {
+        if (sub.bounds.size.width < 10) continue;
+        NSString *cls = NSStringFromClass([sub class]);
+        if ([sub isKindOfClass:[UIVisualEffectView class]]
+            || [cls containsString:@"WallpaperEffect"] || [cls containsString:@"Material"]
+            || [cls containsString:@"Backdrop"] || [cls containsString:@"Background"]) {
+            return sub;
+        }
+        UIView *deep = axs_notifyliquid_findBackgroundView(sub, depth + 1);
+        if (deep) return deep;
+    }
+    return nil;
+}
+
 // 找通知标题（字体最大的 UILabel）。
 static UILabel *axs_notifyliquid_findTitleLabel(UIView *view, int depth) {
     if (depth > 6) return nil;
@@ -570,8 +588,15 @@ static NSUInteger axs_notifyliquid_styleSignature(AxsNotifyLiquidConfig *config,
         }
         double cr = [config axs_notifyliquid_cornerRadius];
         if (cr > 0) {
-            v.layer.cornerRadius = (CGFloat)cr;
-            v.layer.masksToBounds = YES;
+            // 圆角打在背景视图上（只裁背景的角）；通知层不设 masksToBounds，
+            // 否则粒子/火花/泡泡全被裁在通知内飘不出去。
+            UIView *bg = axs_notifyliquid_findBackgroundView(v, 0);
+            if (bg) {
+                bg.layer.cornerRadius = (CGFloat)cr;
+                bg.layer.masksToBounds = YES;
+            } else {
+                v.layer.cornerRadius = (CGFloat)cr;   // 无背景层时仅设圆角（不裁剪）
+            }
         }
         double op = [config axs_notifyliquid_notifyOpacity];
         if (op < 0.999) {
@@ -599,7 +624,8 @@ static NSUInteger axs_notifyliquid_styleSignature(AxsNotifyLiquidConfig *config,
 
         // ── 效果层帧同步 ──
         e.gradient.frame = v.bounds;
-        e.gradient.cornerRadius = v.layer.cornerRadius > 0 ? v.layer.cornerRadius : 24.0;
+        e.gradient.cornerRadius = cr > 0 ? (CGFloat)cr
+            : (v.layer.cornerRadius > 0 ? v.layer.cornerRadius : 24.0);
         e.burst.frame = v.bounds;
         e.burst.emitterPosition = CGPointMake(CGRectGetMidX(v.bounds), CGRectGetMidY(v.bounds));
 
