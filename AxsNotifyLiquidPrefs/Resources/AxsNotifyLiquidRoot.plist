@@ -148,39 +148,35 @@
 
         <dict>
             <key>cell</key><string>PSGroupCell</string>
-            <key>label</key><string>粒子特效（通知内飘落）</string>
-            <key>footerText</key><string>「自动」按季节换（冬❄️/春🌸/夏⭐/秋🍂）；「emoji」用下方输入的 emoji；「PNG」加载下方路径的 PNG 图（找不到自动回退 ✨）。</string>
+            <key>label</key><string>粒子特效（图片导入）</string>
+            <key>footerText</key><string>粒子用图片文件：多张图路径用 ; 分隔轮流飘落；找不到文件自动回退 ✨。</string>
         </dict>
         <dict>
-            <key>cell</key><string>PSSegmentCell</string>
-            <key>label</key><string>粒子样式</string>
-            <key>key</key><string>particle_style</string>
+            <key>cell</key><string>PSSwitchCell</string>
+            <key>label</key><string>启用粒子</string>
+            <key>key</key><string>particle_on</string>
             <key>defaults</key><string>com.axs.notifyliquid</string>
-            <key>default</key><integer>0</integer>
-            <key>validValues</key>
-            <array>
-                <integer>0</integer>
-                <integer>1</integer>
-                <integer>2</integer>
-                <integer>3</integer>
-                <integer>4</integer>
-                <integer>5</integer>
-                <integer>6</integer>
-                <integer>7</integer>
-                <integer>8</integer>
-            </array>
-            <key>validTitles</key>
-            <array>
-                <string>关</string>
-                <string>❄️</string>
-                <string>🌸</string>
-                <string>🍂</string>
-                <string>⭐</string>
-                <string>❤️</string>
-                <string>自动</string>
-                <string>emoji</string>
-                <string>PNG</string>
-            </array>
+            <key>default</key><false/>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSTitleValueCell</string>
+            <key>cellClass</key><string>AxsNotifyLiquidTextFieldCell</string>
+            <key>label</key><string>📂 图片路径(点标签跳Filza)</string>
+            <key>key</key><string>particle_png</string>
+            <key>defaults</key><string>com.axs.notifyliquid</string>
+            <key>default</key><string></string>
+            <key>placeholder</key><string>多张用 ; 分隔，如 p1.png;p2.png</string>
+            <key>filza</key><true/>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSTitleValueCell</string>
+            <key>cellClass</key><string>AxsNotifyLiquidSliderCell</string>
+            <key>label</key><string>粒子数量</string>
+            <key>key</key><string>particle_density</string>
+            <key>defaults</key><string>com.axs.notifyliquid</string>
+            <key>default</key><real>1.0</real>
+            <key>min</key><real>0.5</real>
+            <key>max</key><real>3.0</real>
         </dict>
         <dict>
             <key>cell</key><string>PSTitleValueCell</string>
@@ -191,25 +187,6 @@
             <key>default</key><real>1.0</real>
             <key>min</key><real>0.5</real>
             <key>max</key><real>2.0</real>
-        </dict>
-        <dict>
-            <key>cell</key><string>PSTitleValueCell</string>
-            <key>cellClass</key><string>AxsNotifyLiquidTextFieldCell</string>
-            <key>label</key><string>自定义粒子 emoji</string>
-            <key>key</key><string>particle_custom</string>
-            <key>defaults</key><string>com.axs.notifyliquid</string>
-            <key>default</key><string>✨</string>
-            <key>placeholder</key><string>如 🎉（选「emoji」档生效）</string>
-        </dict>
-        <dict>
-            <key>cell</key><string>PSTitleValueCell</string>
-            <key>cellClass</key><string>AxsNotifyLiquidTextFieldCell</string>
-            <key>label</key><string>📂 PNG 路径(点标签跳Filza)</string>
-            <key>key</key><string>particle_png</string>
-            <key>defaults</key><string>com.axs.notifyliquid</string>
-            <key>default</key><string>/var/mobile/Documents/particle.png</string>
-            <key>placeholder</key><string>如 /var/mobile/Documents/p.png</string>
-            <key>filza</key><true/>
         </dict>
 
         <dict>
@@ -273,6 +250,16 @@
             <key>default</key><real>1.0</real>
             <key>min</key><real>0.2</real>
             <key>max</key><real>2.0</real>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSTitleValueCell</string>
+            <key>cellClass</key><string>AxsNotifyLiquidTextFieldCell</string>
+            <key>label</key><string>📂 爆发图片(点标签跳Filza)</string>
+            <key>key</key><string>burst_png</string>
+            <key>defaults</key><string>com.axs.notifyliquid</string>
+            <key>default</key><string></string>
+            <key>placeholder</key><string>留空用默认光点</string>
+            <key>filza</key><true/>
         </dict>
         <dict>
             <key>cell</key><string>PSSwitchCell</string>

@@ -298,20 +298,28 @@ static UIImageView *axs_notifyliquid_findIconView(UIView *view, int depth) {
     burst.emitterShape = kCAEmitterLayerRectangle;
     burst.renderMode = kCAEmitterLayerAdditive;
     burst.opacity = 0;
-    UIGraphicsBeginImageContextWithOptions(CGSizeMake(12, 12), NO, 0);
-    CGContextRef bctx = UIGraphicsGetCurrentContext();
-    CGContextSetFillColorWithColor(bctx, [UIColor whiteColor].CGColor);
-    CGContextFillEllipseInRect(bctx, CGRectMake(3, 3, 6, 6));
-    UIImage *dot = UIGraphicsGetImageFromCurrentImageContext();
-    UIGraphicsEndImageContext();
+    // 爆发 sprite：从文件导入（burst_png），找不到回退白色光点。
+    UIImage *burstSprite = nil;
+    NSString *burstPath = [config axs_notifyliquid_burstPng];
+    if (burstPath.length > 0) {
+        burstSprite = [UIImage imageWithContentsOfFile:burstPath];
+    }
+    if (!burstSprite) {
+        UIGraphicsBeginImageContextWithOptions(CGSizeMake(12, 12), NO, 0);
+        CGContextRef bctx = UIGraphicsGetCurrentContext();
+        CGContextSetFillColorWithColor(bctx, [UIColor whiteColor].CGColor);
+        CGContextFillEllipseInRect(bctx, CGRectMake(3, 3, 6, 6));
+        burstSprite = UIGraphicsGetImageFromCurrentImageContext();
+        UIGraphicsEndImageContext();
+    }
     CAEmitterCell *bCell = [CAEmitterCell emitterCell];
-    bCell.contents = (__bridge id)dot.CGImage;
+    bCell.contents = (__bridge id)burstSprite.CGImage;
     bCell.birthRate = 26.0;
     bCell.lifetime = 1.0;
     bCell.velocity = 110.0;
     bCell.velocityRange = 55.0;
     bCell.emissionRange = M_PI * 2;
-    bCell.scale = 0.35;
+    bCell.scale = burstPath.length > 0 ? 0.55f : 0.35f;
     bCell.scaleRange = 0.2;
     bCell.alphaSpeed = -1.2;
     burst.emitterCells = @[bCell];
@@ -658,63 +666,54 @@ static UIImageView *axs_notifyliquid_findIconView(UIView *view, int depth) {
             }
         }
 
-        // 季节粒子：emoji 飘落（关/❄️/🌸/🍂/⭐/❤️/自动/自定义，大小可调）。
-        NSInteger pStyle = [config axs_notifyliquid_particleStyle];
-        if (pStyle > 0) {
+        // 粒子特效（图片文件导入）：多张图用 ; 分隔轮流飘落，找不到回退 ✨；数量/大小实时。
+        BOOL particleOn = [config axs_notifyliquid_particleOn];
+        if (particleOn) {
             e.season.frame = v.bounds;
             e.season.emitterPosition = CGPointMake(CGRectGetMidX(v.bounds), -6.0);
             e.season.emitterSize = CGSizeMake(v.bounds.size.width, 3.0);
             e.season.opacity = 0.85f;
-            NSString *emoji = nil;
-            UIImage *spriteImg = nil;
-            NSInteger styleKey = pStyle;
-            if (pStyle == 8) {
-                // 自定义 PNG：从路径加载（找不到回退 ✨）。
-                NSString *path = [config axs_notifyliquid_particlePng];
-                spriteImg = [UIImage imageWithContentsOfFile:path];
-                styleKey = 8000 + (NSInteger)((NSUInteger)[path hash] % 100000);
-                if (!spriteImg) emoji = @"✨";
-            } else if (pStyle == 7) {
-                // 自定义：文本按 emoji 拆分。
-                NSString *custom = [config axs_notifyliquid_particleCustom];
-                NSMutableArray<NSString *> *parts = [NSMutableArray array];
-                [custom enumerateSubstringsInRange:NSMakeRange(0, custom.length)
-                    options:NSStringEnumerationByComposedCharacterSequences
-                    usingBlock:^(NSString *sub, NSRange sr, NSRange er, BOOL *stop) {
-                        NSString *tr = [sub stringByTrimmingCharactersInSet:
-                                        [NSCharacterSet whitespaceAndNewlineCharacterSet]];
-                        if (tr.length > 0) [parts addObject:sub];
-                    }];
-                emoji = parts.count ? parts[parts.count / 2] : @"✨";
-                styleKey = 7000 + (NSInteger)((NSUInteger)[custom hash] % 100000);
-            } else if (pStyle == 6) {
-                // 自动：按月份选季节。
-                NSInteger m = [[NSCalendar currentCalendar] component:NSCalendarUnitMonth fromDate:[NSDate date]];
-                emoji = (m == 12 || m <= 2) ? @"❄️" : (m <= 5 ? @"🌸" : (m <= 8 ? @"⭐" : @"🍂"));
-                styleKey = 600 + m;
-            } else {
-                NSArray<NSString *> *pool = @[@"", @"❄️", @"🌸", @"🍂", @"⭐", @"❤️"];
-                emoji = pool[(NSUInteger)pStyle < pool.count ? (NSUInteger)pStyle : 1];
-            }
+            NSString *paths = [config axs_notifyliquid_particlePng];
+            NSInteger styleKey = 9000 + (NSInteger)((NSUInteger)[paths hash] % 100000);
             if (e.lastParticleKey != styleKey) {
                 e.lastParticleKey = styleKey;
-                UIImage *sprite = spriteImg ?: axs_notifyliquid_emojiImage(emoji, 24.0);
-                CAEmitterCell *pCell = [CAEmitterCell emitterCell];
-                pCell.contents = (__bridge id)sprite.CGImage;
-                pCell.birthRate = 3.5f;
-                pCell.lifetime = 5.0f;
-                pCell.velocity = 32.0f;
-                pCell.velocityRange = 14.0f;
-                pCell.emissionLongitude = M_PI_2;   // 向下飘落
-                pCell.emissionRange = M_PI / 6.0;
-                pCell.spin = 0.5f;
-                pCell.spinRange = 1.2f;
-                pCell.alphaSpeed = -0.12f;
-                e.season.emitterCells = @[pCell];
+                // 从文件导入图片（最多 6 张，全部加载失败回退 ✨）。
+                NSMutableArray<UIImage *> *sprites = [NSMutableArray array];
+                for (NSString *raw in [paths componentsSeparatedByString:@";"]) {
+                    NSString *p = [raw stringByTrimmingCharactersInSet:
+                                   [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+                    if (p.length == 0) continue;
+                    UIImage *img = [UIImage imageWithContentsOfFile:p];
+                    if (img) [sprites addObject:img];
+                    if (sprites.count >= 6) break;
+                }
+                if (sprites.count == 0) {
+                    [sprites addObject:axs_notifyliquid_emojiImage(@"✨", 24.0)];
+                }
+                // 每张图一个 cell，混合飘落。
+                NSMutableArray<CAEmitterCell *> *cells = [NSMutableArray array];
+                for (UIImage *sp in sprites) {
+                    CAEmitterCell *pCell = [CAEmitterCell emitterCell];
+                    pCell.contents = (__bridge id)sp.CGImage;
+                    pCell.lifetime = 5.0f;
+                    pCell.velocity = 32.0f;
+                    pCell.velocityRange = 14.0f;
+                    pCell.emissionLongitude = M_PI_2;   // 向下飘落
+                    pCell.emissionRange = M_PI / 6.0;
+                    pCell.spin = 0.5f;
+                    pCell.spinRange = 1.2f;
+                    pCell.alphaSpeed = -0.12f;
+                    [cells addObject:pCell];
+                }
+                e.season.emitterCells = cells;
             }
+            // 数量（密度）/ 大小实时同步。
             double pSize = [config axs_notifyliquid_particleSize];
-            CAEmitterCell *pc = e.season.emitterCells.firstObject;
-            if (pc) {
+            double density = [config axs_notifyliquid_particleDensity];
+            NSArray<CAEmitterCell *> *cells = e.season.emitterCells;
+            float perRate = (float)(3.5 * density / (double)MAX((NSUInteger)1, cells.count));
+            for (CAEmitterCell *pc in cells) {
+                pc.birthRate = perRate;
                 pc.scale = (float)(0.5 * pSize);
                 pc.scaleRange = (float)(0.2 * pSize);
             }

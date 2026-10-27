@@ -126,20 +126,22 @@ static BOOL axs_notifyliquid_bool(id value, BOOL def) {
 - (BOOL)axs_notifyliquid_dissolveOn {
     return axs_notifyliquid_bool([self axs_notifyliquid_valueForKey:@"dissolve_on" defaultValue:nil], NO);
 }
-- (NSInteger)axs_notifyliquid_particleStyle {
-    double d = axs_notifyliquid_clamped([self axs_notifyliquid_valueForKey:@"particle_style" defaultValue:nil], 0.0, 0.0, 8.0);
-    return (NSInteger)d;
+- (BOOL)axs_notifyliquid_particleOn {
+    return axs_notifyliquid_bool([self axs_notifyliquid_valueForKey:@"particle_on" defaultValue:nil], NO);
 }
 - (double)axs_notifyliquid_particleSize {
     return axs_notifyliquid_clamped([self axs_notifyliquid_valueForKey:@"particle_size" defaultValue:nil], 1.0, 0.5, 2.0);
 }
-- (NSString *)axs_notifyliquid_particleCustom {
-    id v = [self axs_notifyliquid_valueForKey:@"particle_custom" defaultValue:nil];
-    return [v isKindOfClass:[NSString class]] ? v : @"✨";
+- (double)axs_notifyliquid_particleDensity {
+    return axs_notifyliquid_clamped([self axs_notifyliquid_valueForKey:@"particle_density" defaultValue:nil], 1.0, 0.5, 3.0);
 }
 - (NSString *)axs_notifyliquid_particlePng {
     id v = [self axs_notifyliquid_valueForKey:@"particle_png" defaultValue:nil];
-    return [v isKindOfClass:[NSString class]] ? v : @"/var/mobile/Documents/particle.png";
+    return [v isKindOfClass:[NSString class]] ? v : @"";
+}
+- (NSString *)axs_notifyliquid_burstPng {
+    id v = [self axs_notifyliquid_valueForKey:@"burst_png" defaultValue:nil];
+    return [v isKindOfClass:[NSString class]] ? v : @"";
 }
 
 - (void)dealloc {
