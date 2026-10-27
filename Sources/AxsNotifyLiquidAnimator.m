@@ -14,6 +14,7 @@ static const void *kAxsLiquidSeenKey = &kAxsLiquidSeenKey;
 @property (nonatomic, strong) CAGradientLayer *gradient;   // 流动渐变背景
 @property (nonatomic, strong) NSMutableArray<CALayer *> *fishLayers;  // 鱼缸游鱼
 @property (nonatomic, strong) NSMutableArray<NSNumber *> *fishNextBubble;  // 每条鱼的吐泡倒计时
+@property (nonatomic, assign) double fishSeed;   // 每条通知随机相位（鱼游互不同步）
 @property (nonatomic, strong) CAEmitterLayer *burst;       // 到达粒子爆发
 @property (nonatomic, strong) CAEmitterLayer *season;      // 季节粒子
 @property (nonatomic, strong) UIColor *iconColor;          // 应用图标取色（缓存）
@@ -268,6 +269,7 @@ static UIImageView *axs_notifyliquid_findIconView(UIView *view, int depth) {
     // 鱼缸游鱼：手绘小鱼 5 色（金橙/青蓝/粉/紫/绿），预建 8 条上限，tick 按 fish_count 显示前 N 条。
     effect.fishLayers = [NSMutableArray array];
     effect.fishNextBubble = [NSMutableArray array];
+    effect.fishSeed = (double)arc4random_uniform(10000) / 100.0;   // 随机相位：各通知鱼游互不同步
     NSArray<UIColor *> *palette = @[
         [UIColor colorWithRed:1.00 green:0.62 blue:0.21 alpha:1],   // 金橙
         [UIColor colorWithRed:0.25 green:0.72 blue:0.85 alpha:1],   // 青蓝
@@ -284,7 +286,7 @@ static UIImageView *axs_notifyliquid_findIconView(UIView *view, int depth) {
         // sprite 高分辨率渲染（矢量小鱼），实际显示大小由 bounds + fish_size 控制。
         UIImage *img = axs_notifyliquid_fishImage(palette[(NSUInteger)i % palette.count], 64.0);
         fish.contents = (__bridge id)img.CGImage;
-        [effect.fishNextBubble addObject:@(1.0 + (i % 5) * 0.6)];
+        [effect.fishNextBubble addObject:@(1.0 + (i % 5) * 0.6 + ((double)arc4random() / UINT32_MAX) * 1.5)];
     }
 
     // 应用图标取色（按 App 专属渐变色，attach 采样一次）。
@@ -622,7 +624,7 @@ static UIImageView *axs_notifyliquid_findIconView(UIView *view, int depth) {
             CGFloat displaySize = (CGFloat)(22.0 * fishSize);
             fish.bounds = CGRectMake(0, 0, displaySize, displaySize);
             double speed = 0.35 + (fi % 4) * 0.09;
-            double phase = t * speed + fi * 1.3;
+            double phase = (t + e.fishSeed) * speed + fi * 1.3;
             CGRect b = v.bounds;
             CGFloat fishX = (CGFloat)(sin(phase) * b.size.width * 0.32) + CGRectGetMidX(b);
             CGFloat fishY = (CGFloat)(cos(phase * 0.7) * 7.0) + b.size.height * (0.40 + 0.09 * (fi % 3));
