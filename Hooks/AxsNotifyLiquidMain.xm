@@ -17,6 +17,10 @@ static NSArray<NSString *> *axs_notifyliquid_presetKeys(void) {
              @"particle_on", @"particle_png", @"particle_density",
              @"particle_size", @"particle_dir",
              @"charge_fx", @"low_power_guard",
+             @"title_color_on", @"title_hue", @"title_glow",
+             @"icon_corner", @"icon_scale", @"icon_glow",
+             @"corner_radius", @"notify_opacity", @"shadow_intensity",
+             @"tilt_intensity", @"notify_width",
              @"auto_schedule", @"schedule_day", @"schedule_night"];
 }
 static void axs_notifyliquid_applyScheduledPreset(void) {

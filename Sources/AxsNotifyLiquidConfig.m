@@ -176,6 +176,43 @@ static BOOL axs_notifyliquid_bool(id value, BOOL def) {
     return [v isKindOfClass:[NSString class]] ? v : @"/var/mobile/Documents/NotifyLiquid/burst.png";
 }
 
+// ── 文字与图标 ──
+- (BOOL)axs_notifyliquid_titleColorOn {
+    return axs_notifyliquid_bool([self axs_notifyliquid_valueForKey:@"title_color_on" defaultValue:nil], NO);
+}
+- (double)axs_notifyliquid_titleHue {
+    return axs_notifyliquid_clamped([self axs_notifyliquid_valueForKey:@"title_hue" defaultValue:nil], 0.55, 0.0, 1.0);
+}
+- (double)axs_notifyliquid_titleGlow {
+    return axs_notifyliquid_clamped([self axs_notifyliquid_valueForKey:@"title_glow" defaultValue:nil], 0.0, 0.0, 1.0);
+}
+- (double)axs_notifyliquid_iconCorner {
+    return axs_notifyliquid_clamped([self axs_notifyliquid_valueForKey:@"icon_corner" defaultValue:nil], 0.0, 0.0, 24.0);
+}
+- (double)axs_notifyliquid_iconScale {
+    return axs_notifyliquid_clamped([self axs_notifyliquid_valueForKey:@"icon_scale" defaultValue:nil], 1.0, 0.7, 1.5);
+}
+- (double)axs_notifyliquid_iconGlow {
+    return axs_notifyliquid_clamped([self axs_notifyliquid_valueForKey:@"icon_glow" defaultValue:nil], 0.0, 0.0, 1.0);
+}
+
+// ── 布局光影（0 = 保持系统默认） ──
+- (double)axs_notifyliquid_cornerRadius {
+    return axs_notifyliquid_clamped([self axs_notifyliquid_valueForKey:@"corner_radius" defaultValue:nil], 0.0, 0.0, 40.0);
+}
+- (double)axs_notifyliquid_notifyOpacity {
+    return axs_notifyliquid_clamped([self axs_notifyliquid_valueForKey:@"notify_opacity" defaultValue:nil], 1.0, 0.3, 1.0);
+}
+- (double)axs_notifyliquid_shadowIntensity {
+    return axs_notifyliquid_clamped([self axs_notifyliquid_valueForKey:@"shadow_intensity" defaultValue:nil], 0.0, 0.0, 1.0);
+}
+- (double)axs_notifyliquid_tiltIntensity {
+    return axs_notifyliquid_clamped([self axs_notifyliquid_valueForKey:@"tilt_intensity" defaultValue:nil], 0.0, 0.0, 1.0);
+}
+- (double)axs_notifyliquid_notifyWidth {
+    return axs_notifyliquid_clamped([self axs_notifyliquid_valueForKey:@"notify_width" defaultValue:nil], 1.0, 0.6, 1.0);
+}
+
 - (void)dealloc {
     CFNotificationCenterRemoveEveryObserver(CFNotificationCenterGetDarwinNotifyCenter(),
                                             (__bridge const void *)self);

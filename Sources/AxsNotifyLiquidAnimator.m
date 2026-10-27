@@ -17,6 +17,9 @@ static const void *kAxsLiquidSeenKey = &kAxsLiquidSeenKey;
 @property (nonatomic, strong) NSMutableArray<NSNumber *> *fishNextBubble;  // 每条鱼的吐泡倒计时
 @property (nonatomic, assign) double fishSeed;   // 每条通知随机相位（鱼游互不同步）
 @property (nonatomic, assign) double particleJitter;   // 每条通知粒子发射率抖动（发射互不同步）
+@property (nonatomic, weak) UILabel *titleLabel;       // 标题标签（最大的字）
+@property (nonatomic, weak) UIImageView *iconView;     // 应用图标
+@property (nonatomic, strong) CAGradientLayer *iconGlow;  // 图标光晕（背后径向渐变）
 @property (nonatomic, assign) double chargeNext; // 充电火花倒计时
 @property (nonatomic, strong) CAEmitterLayer *burst;       // 到达粒子爆发
 @property (nonatomic, strong) CAEmitterLayer *season;      // 季节粒子
@@ -211,6 +214,29 @@ static UIImageView *axs_notifyliquid_findIconView(UIView *view, int depth) {
     return nil;
 }
 
+// 找通知标题（字体最大的 UILabel）。
+static UILabel *axs_notifyliquid_findTitleLabel(UIView *view, int depth) {
+    if (depth > 6) return nil;
+    UILabel *best = nil;
+    CGFloat bestSize = 0;
+    for (UIView *sub in view.subviews) {
+        if ([sub isKindOfClass:[UILabel class]]) {
+            UILabel *lb = (UILabel *)sub;
+            CGFloat fs = lb.font.pointSize;
+            if (fs > bestSize && lb.text.length > 0) {
+                best = lb;
+                bestSize = fs;
+            }
+        }
+        UILabel *deep = axs_notifyliquid_findTitleLabel(sub, depth + 1);
+        if (deep && deep.font.pointSize > bestSize && deep.text.length > 0) {
+            best = deep;
+            bestSize = deep.font.pointSize;
+        }
+    }
+    return best;
+}
+
 @interface AxsNotifyLiquidAnimator ()
 @property (nonatomic, strong) NSMutableArray<AxsNotifyLiquidEffect *> *effects;
 @property (nonatomic, strong) CADisplayLink *link;
@@ -326,6 +352,8 @@ static UIImageView *axs_notifyliquid_findIconView(UIView *view, int depth) {
     // 应用图标取色（按 App 专属渐变色，attach 采样一次）。
     UIImageView *iconView = axs_notifyliquid_findIconView(view, 0);
     effect.iconColor = iconView.image ? [iconView.image axs_notifyliquid_averageColor] : nil;
+    effect.iconView = iconView;
+    effect.titleLabel = axs_notifyliquid_findTitleLabel(view, 0);
 
     // 到达粒子爆发层（新通知瞬间光斑飞溅）。
     CAEmitterLayer *burst = [CAEmitterLayer layer];
@@ -479,6 +507,7 @@ static UIImageView *axs_notifyliquid_findIconView(UIView *view, int depth) {
             for (CALayer *f in e.fishLayers) [f removeFromSuperlayer];
             [e.burst removeFromSuperlayer];
             [e.season removeFromSuperlayer];
+            [e.iconGlow removeFromSuperlayer];
             [self.effects removeObjectAtIndex:(NSUInteger)i];
         }
     }
@@ -492,13 +521,104 @@ static UIImageView *axs_notifyliquid_findIconView(UIView *view, int depth) {
         if (e.view != view) continue;
         UIView *v = e.view;
         if (!v) return;
+
+        // ── 布局光影：宽度 / 圆角 / 透明度 / 投影 ──
+        double wFrac = [config axs_notifyliquid_notifyWidth];
+        if (wFrac < 0.999 && v.superview) {
+            CGFloat targetW = v.superview.bounds.size.width * (CGFloat)wFrac;
+            CGRect f = v.frame;
+            if (targetW > 1 && fabs(f.size.width - targetW) > 1) {
+                f.size.width = targetW;
+                f.origin.x = (v.superview.bounds.size.width - targetW) / 2.0;
+                v.frame = f;
+            }
+        }
+        double cr = [config axs_notifyliquid_cornerRadius];
+        if (cr > 0) {
+            v.layer.cornerRadius = (CGFloat)cr;
+            v.layer.masksToBounds = YES;
+        }
+        double op = [config axs_notifyliquid_notifyOpacity];
+        if (op < 0.999) {
+            v.layer.opacity = (float)op;
+        }
+        double sh = [config axs_notifyliquid_shadowIntensity];
+        if (sh > 0) {
+            v.layer.shadowColor = [UIColor blackColor].CGColor;
+            v.layer.shadowRadius = (CGFloat)(4.0 + 10.0 * sh);
+            v.layer.shadowOpacity = (float)(0.4 * sh);
+            v.layer.shadowOffset = CGSizeMake(0, 6);
+        } else if (v.layer.shadowOpacity != 0) {
+            v.layer.shadowOpacity = 0;
+        }
+
+        // ── 通知缩放 + 3D 倾斜（transform 归我们，frame 归系统） ──
+        double s = [config axs_notifyliquid_notifyScale];
+        double tilt = [config axs_notifyliquid_tiltIntensity];
+        CATransform3D t = CATransform3DIdentity;
+        if (tilt > 0) {
+            t.m34 = -1.0f / 500.0f;
+            t = CATransform3DRotate(t, (CGFloat)(0.10 * tilt), 1, 0, 0);
+        }
+        v.layer.transform = CATransform3DScale(t, s, s, 1.0);
+
+        // ── 效果层帧同步 ──
         e.gradient.frame = v.bounds;
         e.gradient.cornerRadius = v.layer.cornerRadius > 0 ? v.layer.cornerRadius : 24.0;
         e.burst.frame = v.bounds;
         e.burst.emitterPosition = CGPointMake(CGRectGetMidX(v.bounds), CGRectGetMidY(v.bounds));
-        // 通知缩放（transform，布局后重施即自愈——frame 由系统管，transform 归我们）。
-        double s = [config axs_notifyliquid_notifyScale];
-        v.layer.transform = CATransform3DMakeScale(s, s, 1.0);
+
+        // ── 标题：颜色 + 发光 ──
+        UILabel *title = e.titleLabel;
+        if (title) {
+            if ([config axs_notifyliquid_titleColorOn]) {
+                title.textColor = [UIColor colorWithHue:(CGFloat)[config axs_notifyliquid_titleHue]
+                                             saturation:0.75 brightness:1 alpha:1];
+            }
+            double glow = [config axs_notifyliquid_titleGlow];
+            if (glow > 0) {
+                title.layer.shadowColor = [config axs_notifyliquid_titleColorOn]
+                    ? title.textColor.CGColor
+                    : [UIColor whiteColor].CGColor;
+                title.layer.shadowRadius = (CGFloat)(3.0 + 6.0 * glow);
+                title.layer.shadowOpacity = (float)(0.6 * glow);
+                title.layer.shadowOffset = CGSizeZero;
+            } else if (title.layer.shadowOpacity != 0) {
+                title.layer.shadowOpacity = 0;
+            }
+        }
+
+        // ── 图标：圆角 / 大小 / 发光（光晕用背后渐变层，避免与圆角裁剪冲突） ──
+        UIImageView *iv = e.iconView;
+        if (iv) {
+            double ic = [config axs_notifyliquid_iconCorner];
+            if (ic > 0) {
+                iv.layer.cornerRadius = (CGFloat)ic;
+                iv.layer.masksToBounds = YES;
+            }
+            double isc = [config axs_notifyliquid_iconScale];
+            iv.layer.transform = CATransform3DMakeScale((CGFloat)isc, (CGFloat)isc, 1.0);
+            double ig = [config axs_notifyliquid_iconGlow];
+            if (ig > 0 && iv.superview) {
+                if (!e.iconGlow) {
+                    CAGradientLayer *glowL = [CAGradientLayer layer];
+                    glowL.type = kCAGradientLayerRadial;
+                    glowL.startPoint = CGPointMake(0.5, 0.5);
+                    glowL.endPoint = CGPointMake(1.0, 1.0);
+                    glowL.zPosition = -1;   // 图标之下
+                    [iv.superview.layer insertSublayer:glowL atIndex:0];
+                    e.iconGlow = glowL;
+                }
+                CGRect gf = CGRectInset(iv.frame, -10, -10);
+                e.iconGlow.frame = gf;
+                UIColor *gc = e.iconColor ?: [UIColor whiteColor];
+                e.iconGlow.colors = @[(id)[gc colorWithAlphaComponent:(CGFloat)(0.55 * ig)].CGColor,
+                                      (id)[UIColor clearColor].CGColor];
+                e.iconGlow.locations = @[@0, @1];
+            } else if (e.iconGlow) {
+                e.iconGlow.opacity = 0;
+            }
+        }
         return;
     }
 }
@@ -656,6 +776,7 @@ static UIImageView *axs_notifyliquid_findIconView(UIView *view, int depth) {
             for (CALayer *f in e.fishLayers) [f removeFromSuperlayer];
             [e.burst removeFromSuperlayer];
             [e.season removeFromSuperlayer];
+            [e.iconGlow removeFromSuperlayer];
             [self.effects removeObjectAtIndex:(NSUInteger)i];
             continue;
         }

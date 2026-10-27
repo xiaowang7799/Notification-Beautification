@@ -52,6 +52,19 @@
 - (double)axs_notifyliquid_particleSize;
 // 爆发图片路径（找不到回退白色光点）。
 - (NSString *)axs_notifyliquid_burstPng;
+// 文字与图标：标题颜色/发光、图标圆角/大小/发光。
+- (BOOL)axs_notifyliquid_titleColorOn;
+- (double)axs_notifyliquid_titleHue;
+- (double)axs_notifyliquid_titleGlow;
+- (double)axs_notifyliquid_iconCorner;
+- (double)axs_notifyliquid_iconScale;
+- (double)axs_notifyliquid_iconGlow;
+// 布局光影：圆角/透明度/投影/倾斜/宽度（0 = 保持系统默认）。
+- (double)axs_notifyliquid_cornerRadius;
+- (double)axs_notifyliquid_notifyOpacity;
+- (double)axs_notifyliquid_shadowIntensity;
+- (double)axs_notifyliquid_tiltIntensity;
+- (double)axs_notifyliquid_notifyWidth;
 // Generic accessors.
 - (id)axs_notifyliquid_valueForKey:(NSString *)key defaultValue:(id)defaultValue;
 - (void)axs_notifyliquid_reload;
