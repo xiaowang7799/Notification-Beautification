@@ -770,9 +770,31 @@ static UIImageView *axs_notifyliquid_findIconView(UIView *view, int depth) {
         BOOL particleOn = [config axs_notifyliquid_particleOn];
         if (particleOn) {
             e.season.frame = v.bounds;
-            e.season.emitterPosition = CGPointMake(CGRectGetMidX(v.bounds), -6.0);
-            e.season.emitterSize = CGSizeMake(v.bounds.size.width, 3.0);
             e.season.opacity = 0.85f;
+            // 按方向布置发射器几何（之前只改角度不改位置：上飘从顶部射出屏幕）。
+            NSInteger pDir = [config axs_notifyliquid_particleDir];
+            CGRect pb = v.bounds;
+            if (pDir == 1) {
+                // 上飘：底部线向上。
+                e.season.emitterShape = kCAEmitterLayerLine;
+                e.season.emitterPosition = CGPointMake(CGRectGetMidX(pb), CGRectGetMaxY(pb) + 6.0);
+                e.season.emitterSize = CGSizeMake(pb.size.width, 3.0);
+            } else if (pDir == 2) {
+                // 横飘：左边线向右。
+                e.season.emitterShape = kCAEmitterLayerLine;
+                e.season.emitterPosition = CGPointMake(-6.0, CGRectGetMidY(pb));
+                e.season.emitterSize = CGSizeMake(3.0, pb.size.height);
+            } else if (pDir == 3) {
+                // 多向：中心点全方向。
+                e.season.emitterShape = kCAEmitterLayerRectangle;
+                e.season.emitterPosition = CGPointMake(CGRectGetMidX(pb), CGRectGetMidY(pb));
+                e.season.emitterSize = CGSizeMake(8.0, 8.0);
+            } else {
+                // 下落：顶部线向下。
+                e.season.emitterShape = kCAEmitterLayerLine;
+                e.season.emitterPosition = CGPointMake(CGRectGetMidX(pb), -6.0);
+                e.season.emitterSize = CGSizeMake(pb.size.width, 3.0);
+            }
             NSString *paths = [config axs_notifyliquid_particlePng];
             NSInteger styleKey = 9000 + (NSInteger)((NSUInteger)[paths hash] % 100000);
             // 路径变了，或上次是回退态（文件可能后放进来）→ 2 秒重试一次。
@@ -817,20 +839,21 @@ static UIImageView *axs_notifyliquid_findIconView(UIView *view, int depth) {
                 }
                 e.season.emitterCells = cells;
             }
-            // 数量（密度）/ 大小 / 方向 实时同步。
+            // 数量（密度）/ 大小 / 发射角 实时同步（pDir 见上方几何段）。
             double pSize = [config axs_notifyliquid_particleSize];
             double density = [config axs_notifyliquid_particleDensity];
-            NSInteger pDir = [config axs_notifyliquid_particleDir];
             NSArray<CAEmitterCell *> *cells = e.season.emitterCells;
             float perRate = (float)(3.5 * density * (lowPower ? 0.4 : 1.0)
                                     / (double)MAX((NSUInteger)1, cells.count));
-            double pLongitude = (pDir == 1) ? -M_PI_2 : ((pDir == 2) ? 0.0 : M_PI_2);  // 上飘/横飘/下落
-            float pVelocity = (pDir == 2) ? 26.0f : 32.0f;
+            double pLongitude = (pDir == 1) ? -M_PI_2 : ((pDir == 2) ? 0.0 : M_PI_2);
+            double pRange = (pDir == 3) ? M_PI * 2 : M_PI / 6.0;   // 多向 = 全方向发散
+            float pVelocity = (pDir == 2) ? 26.0f : ((pDir == 3) ? 36.0f : 32.0f);
             for (CAEmitterCell *pc in cells) {
                 pc.birthRate = perRate;
                 pc.scale = (float)(0.5 * pSize);
                 pc.scaleRange = (float)(0.2 * pSize);
                 pc.emissionLongitude = pLongitude;
+                pc.emissionRange = pRange;
                 pc.velocity = pVelocity;
             }
         } else if (e.season.opacity != 0) {

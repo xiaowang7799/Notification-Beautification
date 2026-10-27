@@ -121,7 +121,7 @@ static BOOL axs_notifyliquid_bool(id value, BOOL def) {
     return axs_notifyliquid_clamped([self axs_notifyliquid_valueForKey:@"bubble_opacity" defaultValue:nil], 0.9, 0.1, 1.0);
 }
 - (NSInteger)axs_notifyliquid_particleDir {
-    double d = axs_notifyliquid_clamped([self axs_notifyliquid_valueForKey:@"particle_dir" defaultValue:nil], 0.0, 0.0, 2.0);
+    double d = axs_notifyliquid_clamped([self axs_notifyliquid_valueForKey:@"particle_dir" defaultValue:nil], 0.0, 0.0, 3.0);
     return (NSInteger)d;
 }
 - (BOOL)axs_notifyliquid_chargeFx {

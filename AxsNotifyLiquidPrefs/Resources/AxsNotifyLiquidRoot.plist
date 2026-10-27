@@ -234,12 +234,14 @@
                 <integer>0</integer>
                 <integer>1</integer>
                 <integer>2</integer>
+                <integer>3</integer>
             </array>
             <key>validTitles</key>
             <array>
                 <string>下落</string>
                 <string>上飘</string>
                 <string>横飘</string>
+                <string>多向</string>
             </array>
         </dict>
 
