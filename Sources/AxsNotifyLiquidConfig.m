@@ -137,11 +137,12 @@ static BOOL axs_notifyliquid_bool(id value, BOOL def) {
 }
 - (NSString *)axs_notifyliquid_particlePng {
     id v = [self axs_notifyliquid_valueForKey:@"particle_png" defaultValue:nil];
-    return [v isKindOfClass:[NSString class]] ? v : @"";
+    // 默认值必须与设置面板 default 一致（未手动编辑时偏好文件里没有该键）。
+    return [v isKindOfClass:[NSString class]] ? v : @"/var/mobile/Documents/NotifyLiquid/particle.png";
 }
 - (NSString *)axs_notifyliquid_burstPng {
     id v = [self axs_notifyliquid_valueForKey:@"burst_png" defaultValue:nil];
-    return [v isKindOfClass:[NSString class]] ? v : @"";
+    return [v isKindOfClass:[NSString class]] ? v : @"/var/mobile/Documents/NotifyLiquid/burst.png";
 }
 
 - (void)dealloc {

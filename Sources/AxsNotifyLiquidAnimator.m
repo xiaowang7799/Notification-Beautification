@@ -17,7 +17,8 @@ static const void *kAxsLiquidSeenKey = &kAxsLiquidSeenKey;
 @property (nonatomic, strong) CAEmitterLayer *burst;       // 到达粒子爆发
 @property (nonatomic, strong) CAEmitterLayer *season;      // 季节粒子
 @property (nonatomic, strong) UIColor *iconColor;          // 应用图标取色（缓存）
-@property (nonatomic, assign) NSInteger lastParticleKey;   // 粒子样式缓存
+@property (nonatomic, assign) NSInteger lastParticleKey;   // 粒子样式缓存（-1 = 回退态）
+@property (nonatomic, assign) CFTimeInterval lastLoadAttempt;  // 图片加载重试时间戳
 @property (nonatomic, assign) BOOL burstPlayed;
 @end
 @implementation AxsNotifyLiquidEffect
@@ -675,8 +676,14 @@ static UIImageView *axs_notifyliquid_findIconView(UIView *view, int depth) {
             e.season.opacity = 0.85f;
             NSString *paths = [config axs_notifyliquid_particlePng];
             NSInteger styleKey = 9000 + (NSInteger)((NSUInteger)[paths hash] % 100000);
-            if (e.lastParticleKey != styleKey) {
-                e.lastParticleKey = styleKey;
+            // 路径变了，或上次是回退态（文件可能后放进来）→ 2 秒重试一次。
+            CFTimeInterval now = CFAbsoluteTimeGetCurrent();
+            BOOL needRebuild = (e.lastParticleKey != styleKey);
+            if (!needRebuild && e.lastParticleKey == -1 && now - e.lastLoadAttempt > 2.0) {
+                needRebuild = YES;
+            }
+            if (needRebuild) {
+                e.lastLoadAttempt = now;
                 // 从文件导入图片（最多 6 张，全部加载失败回退 ✨）。
                 NSMutableArray<UIImage *> *sprites = [NSMutableArray array];
                 for (NSString *raw in [paths componentsSeparatedByString:@";"]) {
@@ -688,7 +695,11 @@ static UIImageView *axs_notifyliquid_findIconView(UIView *view, int depth) {
                     if (sprites.count >= 6) break;
                 }
                 if (sprites.count == 0) {
+                    // 回退 ✨ 并标记回退态（lastParticleKey = -1），后续定时重试。
                     [sprites addObject:axs_notifyliquid_emojiImage(@"✨", 24.0)];
+                    e.lastParticleKey = -1;
+                } else {
+                    e.lastParticleKey = styleKey;
                 }
                 // 每张图一个 cell，混合飘落。
                 NSMutableArray<CAEmitterCell *> *cells = [NSMutableArray array];
