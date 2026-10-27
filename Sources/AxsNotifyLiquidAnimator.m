@@ -20,6 +20,9 @@ static const void *kAxsLiquidSeenKey = &kAxsLiquidSeenKey;
 @property (nonatomic, weak) UILabel *titleLabel;       // 标题标签（最大的字）
 @property (nonatomic, weak) UIImageView *iconView;     // 应用图标
 @property (nonatomic, strong) CAGradientLayer *iconGlow;  // 图标光晕（背后径向渐变）
+@property (nonatomic, assign) NSUInteger styleSignature;   // 样式记忆（参数未变跳过重刷）
+@property (nonatomic, strong) NSMutableArray<NSNumber *> *fishFlip;   // 每条鱼的朝向缓存
+@property (nonatomic, assign) float lastGradientAlpha;     // 渐变透明度缓存（避免重复写）
 @property (nonatomic, assign) double chargeNext; // 充电火花倒计时
 @property (nonatomic, strong) CAEmitterLayer *burst;       // 到达粒子爆发
 @property (nonatomic, strong) CAEmitterLayer *season;      // 季节粒子
@@ -315,6 +318,7 @@ static UILabel *axs_notifyliquid_findTitleLabel(UIView *view, int depth) {
     // 鱼缸游鱼：自定义图片优先（多张 ; 分隔轮流），否则手绘 5 色小鱼。
     effect.fishLayers = [NSMutableArray array];
     effect.fishNextBubble = [NSMutableArray array];
+    effect.fishFlip = [NSMutableArray array];
     effect.fishSeed = (double)arc4random_uniform(10000) / 100.0;   // 随机相位：各通知鱼游互不同步
     effect.particleJitter = 0.85 + ((double)arc4random() / UINT32_MAX) * 0.5;   // 发射率抖动 ±25%
     effect.chargeNext = 1.0;
@@ -347,6 +351,7 @@ static UILabel *axs_notifyliquid_findTitleLabel(UIView *view, int depth) {
             : axs_notifyliquid_fishImage(palette[(NSUInteger)i % palette.count], 64.0);
         fish.contents = (__bridge id)img.CGImage;
         [effect.fishNextBubble addObject:@(1.0 + (i % 5) * 0.6 + ((double)arc4random() / UINT32_MAX) * 1.5)];
+        [effect.fishFlip addObject:@NO];
     }
 
     // 应用图标取色（按 App 专属渐变色，attach 采样一次）。
@@ -514,6 +519,32 @@ static UILabel *axs_notifyliquid_findTitleLabel(UIView *view, int depth) {
     if (self.effects.count == 0) [self axs_notifyliquid_stopLink];
 }
 
+// 样式签名：样式参数与尺寸未变时，refresh 整段跳过（滚动时 layoutSubviews 高频触发）。
+static NSUInteger axs_notifyliquid_styleSignature(AxsNotifyLiquidConfig *config, UIView *v) {
+    NSUInteger sig = (NSUInteger)(v.bounds.size.width) * 1000 + (NSUInteger)(v.bounds.size.height);
+    double vals[] = {
+        [config axs_notifyliquid_notifyScale],
+        [config axs_notifyliquid_titleHue],
+        [config axs_notifyliquid_titleGlow],
+        [config axs_notifyliquid_iconCorner],
+        [config axs_notifyliquid_iconScale],
+        [config axs_notifyliquid_iconGlow],
+        [config axs_notifyliquid_cornerRadius],
+        [config axs_notifyliquid_notifyOpacity],
+        [config axs_notifyliquid_shadowIntensity],
+        [config axs_notifyliquid_tiltIntensity],
+        [config axs_notifyliquid_notifyWidth],
+    };
+    for (size_t i = 0; i < sizeof(vals) / sizeof(vals[0]); i++) {
+        sig = sig * 31 + (NSUInteger)(long)(vals[i] * 500.0);
+    }
+    sig = sig * 31 + ([config axs_notifyliquid_titleColorOn] ? 1u : 0u);
+    if (v.superview) {
+        sig = sig * 31 + (NSUInteger)(v.superview.bounds.size.width);
+    }
+    return sig;
+}
+
 - (void)axs_notifyliquid_refreshForView:(UIView *)view {
     AxsNotifyLiquidConfig *config = [AxsNotifyLiquidConfig axs_notifyliquid_shared];
     if (![config axs_notifyliquid_isEnabled]) return;
@@ -521,6 +552,10 @@ static UILabel *axs_notifyliquid_findTitleLabel(UIView *view, int depth) {
         if (e.view != view) continue;
         UIView *v = e.view;
         if (!v) return;
+        // 样式签名记忆：参数/尺寸没变就不碰任何属性。
+        NSUInteger sig = axs_notifyliquid_styleSignature(config, v);
+        if (sig == e.styleSignature) return;
+        e.styleSignature = sig;
 
         // ── 布局光影：宽度 / 圆角 / 透明度 / 投影 ──
         double wFrac = [config axs_notifyliquid_notifyWidth];
@@ -789,7 +824,11 @@ static UILabel *axs_notifyliquid_findTitleLabel(UIView *view, int depth) {
                     if (v.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark) dim = 0.72;
                 }
             }
-            e.gradient.opacity = (float)(gOpacity * dim);
+            float gAlpha = (float)(gOpacity * dim);
+            if (e.lastGradientAlpha != gAlpha) {
+                e.lastGradientAlpha = gAlpha;
+                e.gradient.opacity = gAlpha;
+            }
             // 轴向缓慢旋转（便宜，逐帧）。
             double ang = t * 0.12;
             e.gradient.startPoint = CGPointMake(0.5 + 0.5 * cos(ang), 0.5 + 0.5 * sin(ang));
@@ -825,6 +864,7 @@ static UILabel *axs_notifyliquid_findTitleLabel(UIView *view, int depth) {
             }
         } else if (e.gradient.opacity != 0) {
             e.gradient.opacity = 0;
+            e.lastGradientAlpha = 0;
         }
 
         // 鱼缸游鱼：前 fish_count 条可见，正弦游动 + 方向翻转（数量/大小实时生效）。
@@ -847,8 +887,13 @@ static UILabel *axs_notifyliquid_findTitleLabel(UIView *view, int depth) {
                 CGFloat fishX = (CGFloat)(sin(phase) * b.size.width * 0.32) + CGRectGetMidX(b);
                 CGFloat fishY = (CGFloat)(cos(phase * 0.7) * 7.0) + b.size.height * (0.40 + 0.09 * (fi % 3));
                 fish.position = CGPointMake(fishX, fishY);
-                // 方向翻转：鱼图头朝左，向右游（cos>0）时镜像。
-                fish.transform = cos(phase) > 0 ? CATransform3DMakeScale(-1, 1, 1) : CATransform3DIdentity;
+                // 方向翻转：只在掉头瞬间写 transform（图头朝左，向右游时镜像）。
+                BOOL flip = cos(phase) > 0;
+                NSNumber *lastFlip = (fi < (NSInteger)e.fishFlip.count) ? e.fishFlip[(NSUInteger)fi] : nil;
+                if (lastFlip.boolValue != flip) {
+                    if (fi < (NSInteger)e.fishFlip.count) e.fishFlip[(NSUInteger)fi] = @(flip);
+                    fish.transform = flip ? CATransform3DMakeScale(-1, 1, 1) : CATransform3DIdentity;
+                }
 
                 // 鱼吐泡泡：倒计时到 0 时从嘴边冒一个泡泡，上浮渐隐后自清。
                 if (fi < (NSInteger)e.fishNextBubble.count) {
@@ -1026,6 +1071,12 @@ static UILabel *axs_notifyliquid_findTitleLabel(UIView *view, int depth) {
     // 全关：停表省电（配置变更通知 / 新通知挂载会自动重启）。
     if (!gradientOn && !fishOn && !particleOn && !charging) {
         [self axs_notifyliquid_stopLink];
+        return;
+    }
+    // 自适应帧率：纯慢效（渐变）15fps，鱼/粒子/充电等快效 30fps。
+    NSInteger want = (fishOn || particleOn || charging) ? 30 : 15;
+    if (self.link && self.link.preferredFramesPerSecond != (int)want) {
+        self.link.preferredFramesPerSecond = (int)want;
     }
 }
 
