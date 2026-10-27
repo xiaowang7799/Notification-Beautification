@@ -14,4 +14,6 @@
 - (void)axs_notifyliquid_refreshForView:(UIView *)view;
 // 触摸发光（touch glow）：高光脉冲 + 微挤压。
 - (void)axs_notifyliquid_touchGlowForView:(UIView *)view;
+// 消失消散：划走/清除时液态溶解（willMoveToWindow:nil 时调用）。
+- (void)axs_notifyliquid_dissolveForView:(UIView *)view;
 @end

@@ -116,6 +116,33 @@ static BOOL axs_notifyliquid_bool(id value, BOOL def) {
 - (BOOL)axs_notifyliquid_hideClearAll {
     return axs_notifyliquid_bool([self axs_notifyliquid_valueForKey:@"hide_clear_all" defaultValue:nil], YES);
 }
+- (NSInteger)axs_notifyliquid_colorSource {
+    double d = axs_notifyliquid_clamped([self axs_notifyliquid_valueForKey:@"color_source" defaultValue:nil], 0.0, 0.0, 2.0);
+    return (NSInteger)d;
+}
+- (BOOL)axs_notifyliquid_darkDim {
+    return axs_notifyliquid_bool([self axs_notifyliquid_valueForKey:@"dark_dim" defaultValue:nil], NO);
+}
+- (BOOL)axs_notifyliquid_burstOn {
+    return axs_notifyliquid_bool([self axs_notifyliquid_valueForKey:@"burst_on" defaultValue:nil], NO);
+}
+- (double)axs_notifyliquid_burstIntensity {
+    return axs_notifyliquid_clamped([self axs_notifyliquid_valueForKey:@"burst_intensity" defaultValue:nil], 1.0, 0.2, 2.0);
+}
+- (BOOL)axs_notifyliquid_dissolveOn {
+    return axs_notifyliquid_bool([self axs_notifyliquid_valueForKey:@"dissolve_on" defaultValue:nil], NO);
+}
+- (NSInteger)axs_notifyliquid_particleStyle {
+    double d = axs_notifyliquid_clamped([self axs_notifyliquid_valueForKey:@"particle_style" defaultValue:nil], 0.0, 0.0, 7.0);
+    return (NSInteger)d;
+}
+- (double)axs_notifyliquid_particleSize {
+    return axs_notifyliquid_clamped([self axs_notifyliquid_valueForKey:@"particle_size" defaultValue:nil], 1.0, 0.5, 2.0);
+}
+- (NSString *)axs_notifyliquid_particleCustom {
+    id v = [self axs_notifyliquid_valueForKey:@"particle_custom" defaultValue:nil];
+    return [v isKindOfClass:[NSString class]] ? v : @"✨";
+}
 
 - (void)dealloc {
     CFNotificationCenterRemoveEveryObserver(CFNotificationCenterGetDarwinNotifyCenter(),

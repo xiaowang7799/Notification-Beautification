@@ -9,11 +9,16 @@
 @property (nonatomic, weak) UIView *view;
 @property (nonatomic, strong) CAGradientLayer *gradient;   // 流动渐变背景
 @property (nonatomic, strong) NSMutableArray<CALayer *> *fishLayers;  // 鱼缸游鱼
+@property (nonatomic, strong) CAEmitterLayer *burst;       // 到达粒子爆发
+@property (nonatomic, strong) CAEmitterLayer *season;      // 季节粒子
+@property (nonatomic, strong) UIColor *iconColor;          // 应用图标取色（缓存）
+@property (nonatomic, assign) NSInteger lastParticleKey;   // 粒子样式缓存
+@property (nonatomic, assign) BOOL burstPlayed;
 @end
 @implementation AxsNotifyLiquidEffect
 @end
 
-// emoji 渲染成图片（鱼 sprite）。
+// emoji 渲染成图片（鱼/粒子 sprite）。
 static UIImage *axs_notifyliquid_emojiImage(NSString *emoji, CGFloat size) {
     UIGraphicsBeginImageContextWithOptions(CGSizeMake(size, size), NO, 0);
     NSMutableParagraphStyle *style = [NSMutableParagraphStyle new];
@@ -24,6 +29,76 @@ static UIImage *axs_notifyliquid_emojiImage(NSString *emoji, CGFloat size) {
     UIImage *img = UIGraphicsGetImageFromCurrentImageContext();
     UIGraphicsEndImageContext();
     return img;
+}
+
+// UIImage 平均色（壁纸/图标取色用）。
+@interface UIImage (AxsNotifyLiquidAverage)
+- (UIColor *)axs_notifyliquid_averageColor;
+@end
+@implementation UIImage (AxsNotifyLiquidAverage)
+- (UIColor *)axs_notifyliquid_averageColor {
+    CGImageRef cg = self.CGImage;
+    if (!cg) return nil;
+    size_t w = 16, h = 16;
+    CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
+    uint8_t *buf = (uint8_t *)calloc(w * h * 4, 1);
+    if (!buf) { CGColorSpaceRelease(space); return nil; }
+    CGContextRef ctx = CGBitmapContextCreate(buf, w, h, 8, w * 4, space,
+        kCGImageAlphaPremultipliedLast | kCGBitmapByteOrder32Big);
+    if (!ctx) { free(buf); CGColorSpaceRelease(space); return nil; }
+    CGContextDrawImage(ctx, CGRectMake(0, 0, w, h), cg);
+    double r = 0, g = 0, b = 0;
+    for (size_t i = 0; i < w * h; i++) { r += buf[i*4]; g += buf[i*4+1]; b += buf[i*4+2]; }
+    size_t n = w * h;
+    UIColor *color = [UIColor colorWithRed:r/n/255.0 green:g/n/255.0 blue:b/n/255.0 alpha:1.0];
+    CGContextRelease(ctx); CGColorSpaceRelease(space); free(buf);
+    return color;
+}
+@end
+
+// 壁纸主色（缓存 5 秒，避免逐帧解码）。
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Warc-performSelector-leaks"
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+static UIColor *axs_notifyliquid_wallpaperColor(void) {
+    static UIColor *cached = nil;
+    static CFTimeInterval cachedAt = -100.0;
+    CFTimeInterval now = CFAbsoluteTimeGetCurrent();
+    if (cached && now - cachedAt < 5.0) return cached;
+    cachedAt = now;
+    if (@available(iOS 13.0, *)) {
+        Class cls = NSClassFromString(@"SBFWallpaperView");
+        if (!cls) return cached;
+        SEL sharedSel = NSSelectorFromString(@"sharedInstance");
+        if (![cls respondsToSelector:sharedSel]) return cached;
+        id view = [cls performSelector:sharedSel];
+        if (!view) return cached;
+        SEL imgSel = NSSelectorFromString(@"currentWallpaperImage");
+        if (![view respondsToSelector:imgSel]) return cached;
+        UIImage *img = [view performSelector:imgSel];
+        if (![img isKindOfClass:[UIImage class]]) return cached;
+        cached = [img axs_notifyliquid_averageColor];
+        return cached;
+    }
+    return cached;
+}
+#pragma clang diagnostic pop
+
+// 找通知里的应用图标（正方形小 UIImageView）。
+static UIImageView *axs_notifyliquid_findIconView(UIView *view, int depth) {
+    if (depth > 6) return nil;
+    for (UIView *sub in view.subviews) {
+        if ([sub isKindOfClass:[UIImageView class]]) {
+            UIImageView *iv = (UIImageView *)sub;
+            CGFloat w = iv.bounds.size.width;
+            if (iv.image && w > 8 && w < 80 && fabs(w - iv.bounds.size.height) < 4) {
+                return iv;
+            }
+        }
+        UIImageView *deep = axs_notifyliquid_findIconView(sub, depth + 1);
+        if (deep) return deep;
+    }
+    return nil;
 }
 
 @interface AxsNotifyLiquidAnimator ()
@@ -93,6 +168,51 @@ static UIImage *axs_notifyliquid_emojiImage(NSString *emoji, CGFloat size) {
         fish.contents = (__bridge id)img.CGImage;
     }
 
+    // 应用图标取色（按 App 专属渐变色，attach 采样一次）。
+    UIImageView *iconView = axs_notifyliquid_findIconView(view, 0);
+    effect.iconColor = iconView.image ? [iconView.image axs_notifyliquid_averageColor] : nil;
+
+    // 到达粒子爆发层（新通知瞬间光斑飞溅）。
+    CAEmitterLayer *burst = [CAEmitterLayer layer];
+    burst.frame = view.bounds;
+    burst.emitterPosition = CGPointMake(CGRectGetMidX(view.bounds), CGRectGetMidY(view.bounds));
+    burst.emitterSize = CGSizeMake(6, 6);
+    burst.emitterShape = kCAEmitterLayerRectangle;
+    burst.renderMode = kCAEmitterLayerAdditive;
+    burst.opacity = 0;
+    UIGraphicsBeginImageContextWithOptions(CGSizeMake(12, 12), NO, 0);
+    CGContextRef bctx = UIGraphicsGetCurrentContext();
+    CGContextSetFillColorWithColor(bctx, [UIColor whiteColor].CGColor);
+    CGContextFillEllipseInRect(bctx, CGRectMake(3, 3, 6, 6));
+    UIImage *dot = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    CAEmitterCell *bCell = [CAEmitterCell emitterCell];
+    bCell.contents = (__bridge id)dot.CGImage;
+    bCell.birthRate = 26.0;
+    bCell.lifetime = 1.0;
+    bCell.velocity = 110.0;
+    bCell.velocityRange = 55.0;
+    bCell.emissionRange = M_PI * 2;
+    bCell.scale = 0.35;
+    bCell.scaleRange = 0.2;
+    bCell.alphaSpeed = -1.2;
+    burst.emitterCells = @[bCell];
+    [view.layer addSublayer:burst];
+    effect.burst = burst;
+    effect.burstPlayed = NO;
+
+    // 季节粒子层（飘落 emoji）。
+    CAEmitterLayer *season = [CAEmitterLayer layer];
+    season.frame = view.bounds;
+    season.emitterPosition = CGPointMake(CGRectGetMidX(view.bounds), -6.0);
+    season.emitterSize = CGSizeMake(view.bounds.size.width, 3.0);
+    season.emitterShape = kCAEmitterLayerLine;
+    season.renderMode = kCAEmitterLayerUnordered;
+    season.opacity = 0;
+    [view.layer addSublayer:season];
+    effect.season = season;
+    effect.lastParticleKey = -1;
+
     [self.effects addObject:effect];
 
     // 出现动画（五档）：果冻弹跳 / 除雾渐显 / 挤压拉伸 / 凝胶膨胀。
@@ -151,6 +271,31 @@ static UIImage *axs_notifyliquid_emojiImage(NSString *emoji, CGFloat size) {
 
     [self axs_notifyliquid_refreshForView:view];
     [self axs_notifyliquid_ensureLink];
+
+    // 到达粒子爆发：一次性播放（强度控制规模）。
+    if ([config axs_notifyliquid_burstOn] && !effect.burstPlayed) {
+        effect.burstPlayed = YES;
+        double bi = [config axs_notifyliquid_burstIntensity];
+        effect.burst.opacity = 1.0f;
+        CAEmitterCell *bc = effect.burst.emitterCells.firstObject;
+        if (bc) {
+            bc.birthRate = (float)(26.0 * bi);
+            bc.scale = (float)(0.35 * (0.7 + 0.3 * bi));
+            UIColor *source = effect.iconColor ?: [UIColor colorWithHue:0.6 saturation:0.7 brightness:1 alpha:1];
+            bc.color = source.CGColor;
+        }
+        __weak AxsNotifyLiquidEffect *we = effect;
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.4 * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            AxsNotifyLiquidEffect *e = we;
+            if (e && e.burst) e.burst.birthRate = 0;   // 停止发射，余粒自消
+        });
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            AxsNotifyLiquidEffect *e = we;
+            if (e && e.burst) e.burst.opacity = 0;
+        });
+    }
 }
 
 - (void)axs_notifyliquid_detachView:(UIView *)view {
@@ -158,6 +303,9 @@ static UIImage *axs_notifyliquid_emojiImage(NSString *emoji, CGFloat size) {
         AxsNotifyLiquidEffect *e = self.effects[(NSUInteger)i];
         if (e.view == view || e.view == nil) {
             [e.gradient removeFromSuperlayer];
+            for (CALayer *f in e.fishLayers) [f removeFromSuperlayer];
+            [e.burst removeFromSuperlayer];
+            [e.season removeFromSuperlayer];
             [self.effects removeObjectAtIndex:(NSUInteger)i];
         }
     }
@@ -205,6 +353,40 @@ static UIImage *axs_notifyliquid_emojiImage(NSString *emoji, CGFloat size) {
     }
 }
 
+#pragma mark - 消失消散（划走/清除时液态溶解）
+
+- (void)axs_notifyliquid_dissolveForView:(UIView *)view {
+    AxsNotifyLiquidConfig *config = [AxsNotifyLiquidConfig axs_notifyliquid_shared];
+    if (![config axs_notifyliquid_isEnabled] || ![config axs_notifyliquid_dissolveOn]) return;
+    // 整体淡出 + 轻微收缩（叠加在系统划走动画上，产生"溶解"感）。
+    CAAnimationGroup *group = [CAAnimationGroup animation];
+    CABasicAnimation *fade = [CABasicAnimation animationWithKeyPath:@"opacity"];
+    fade.fromValue = @1.0;
+    fade.toValue = @0.0;
+    CABasicAnimation *shrink = [CABasicAnimation animationWithKeyPath:@"transform.scale"];
+    shrink.fromValue = @1.0;
+    shrink.toValue = @0.88;
+    group.animations = @[fade, shrink];
+    group.duration = 0.3;
+    group.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseIn];
+    group.removedOnCompletion = NO;
+    group.fillMode = kCAFillModeForwards;
+    [view.layer addAnimation:group forKey:@"axs_liquid_dissolve"];
+    // 我们的效果层同步淡出。
+    for (AxsNotifyLiquidEffect *e in self.effects) {
+        if (e.view != view) continue;
+        CABasicAnimation *lf = [CABasicAnimation animationWithKeyPath:@"opacity"];
+        lf.fromValue = @(e.gradient.opacity);
+        lf.toValue = @0.0;
+        lf.duration = 0.3;
+        lf.removedOnCompletion = NO;
+        lf.fillMode = kCAFillModeForwards;
+        [e.gradient addAnimation:lf forKey:@"axs_dissolve"];
+        for (CALayer *fish in e.fishLayers) [fish addAnimation:lf forKey:@"axs_dissolve"];
+        return;
+    }
+}
+
 #pragma mark - 动画驱动（30fps，仅有效果时运行）
 
 - (void)axs_notifyliquid_ensureLink {
@@ -242,16 +424,44 @@ static UIImage *axs_notifyliquid_emojiImage(NSString *emoji, CGFloat size) {
         UIView *v = e.view;
         if (!v) {
             [e.gradient removeFromSuperlayer];
+            for (CALayer *f in e.fishLayers) [f removeFromSuperlayer];
+            [e.burst removeFromSuperlayer];
+            [e.season removeFromSuperlayer];
             [self.effects removeObjectAtIndex:(NSUInteger)i];
             continue;
         }
 
-        // 流动渐变：色相随时间漂移 + 渐变位点往复移动（"流动"感，locations 钳制 [0,1]）。
+        // 流动渐变：配色来源（手动双色 / 应用图标取色 / 壁纸取色）+ 色相漂移 + 位点往复。
         if (gradientOn) {
-            e.gradient.opacity = (float)gOpacity;
-            UIColor *c1 = [UIColor colorWithHue:(CGFloat)fmod(hue1 + t * 0.04, 1.0) saturation:0.75 brightness:1 alpha:1];
-            UIColor *c2 = [UIColor colorWithHue:(CGFloat)fmod(hue2 + t * 0.04, 1.0) saturation:0.75 brightness:1 alpha:1];
-            UIColor *cm = [UIColor colorWithHue:(CGFloat)fmod((hue1 + hue2) / 2.0 + t * 0.04, 1.0) saturation:0.75 brightness:1 alpha:1];
+            double dim = 1.0;
+            if ([config axs_notifyliquid_darkDim]) {
+                if (@available(iOS 12.0, *)) {
+                    if (v.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark) dim = 0.72;
+                }
+            }
+            e.gradient.opacity = (float)(gOpacity * dim);
+            UIColor *c1, *c2, *cm;
+            NSInteger source = [config axs_notifyliquid_colorSource];
+            if (source == 1 && e.iconColor) {
+                // 应用图标取色：同色系微漂移（每条通知专属色）。
+                CGFloat h, s, b;
+                [e.iconColor getHue:&h saturation:&s brightness:&b alpha:nil];
+                c1 = [UIColor colorWithHue:(CGFloat)fmod(h + 0.05 + t * 0.02, 1.0) saturation:MAX(s, 0.5f) brightness:1 alpha:1];
+                c2 = [UIColor colorWithHue:(CGFloat)fmod(h - 0.05 + t * 0.02, 1.0) saturation:MAX(s, 0.5f) brightness:1 alpha:1];
+                cm = [UIColor colorWithHue:(CGFloat)fmod(h + t * 0.02, 1.0) saturation:MAX(s, 0.5f) brightness:1 alpha:1];
+            } else if (source == 2) {
+                // 壁纸取色：主色 ± 微漂移。
+                UIColor *wp = axs_notifyliquid_wallpaperColor();
+                CGFloat h = 0.6f, s = 0.5f;
+                if (wp) [wp getHue:&h saturation:NULL brightness:NULL alpha:nil];
+                c1 = [UIColor colorWithHue:(CGFloat)fmod(h + 0.06 + t * 0.02, 1.0) saturation:MAX(s, 0.4f) brightness:1 alpha:1];
+                c2 = [UIColor colorWithHue:(CGFloat)fmod(h - 0.06 + t * 0.02, 1.0) saturation:MAX(s, 0.4f) brightness:1 alpha:1];
+                cm = [UIColor colorWithHue:(CGFloat)fmod(h + t * 0.02, 1.0) saturation:MAX(s, 0.4f) brightness:1 alpha:1];
+            } else {
+                c1 = [UIColor colorWithHue:(CGFloat)fmod(hue1 + t * 0.04, 1.0) saturation:0.75 brightness:1 alpha:1];
+                c2 = [UIColor colorWithHue:(CGFloat)fmod(hue2 + t * 0.04, 1.0) saturation:0.75 brightness:1 alpha:1];
+                cm = [UIColor colorWithHue:(CGFloat)fmod((hue1 + hue2) / 2.0 + t * 0.04, 1.0) saturation:0.75 brightness:1 alpha:1];
+            }
             e.gradient.colors = @[(id)c1.CGColor, (id)cm.CGColor, (id)c2.CGColor];
             double travel = (sin(t * gSpeed * 2.0) + 1.0) / 2.0;   // 0..1 往复
             double span = 0.25;
@@ -282,6 +492,63 @@ static UIImage *axs_notifyliquid_emojiImage(NSString *emoji, CGFloat size) {
             CGFloat fishY = (CGFloat)(cos(phase * 0.7) * 7.0) + b.size.height * (0.40 + 0.09 * (fi % 3));
             fish.position = CGPointMake(fishX, fishY);
             fish.transform = cos(phase) < 0 ? CATransform3DMakeScale(-1, 1, 1) : CATransform3DIdentity;
+        }
+
+        // 季节粒子：emoji 飘落（关/❄️/🌸/🍂/⭐/❤️/自动/自定义，大小可调）。
+        NSInteger pStyle = [config axs_notifyliquid_particleStyle];
+        if (pStyle > 0) {
+            e.season.frame = v.bounds;
+            e.season.emitterPosition = CGPointMake(CGRectGetMidX(v.bounds), -6.0);
+            e.season.emitterSize = CGSizeMake(v.bounds.size.width, 3.0);
+            e.season.opacity = 0.85f;
+            NSString *emoji = nil;
+            NSInteger styleKey = pStyle;
+            if (pStyle == 7) {
+                // 自定义：文本按 emoji 拆分。
+                NSString *custom = [config axs_notifyliquid_particleCustom];
+                NSMutableArray<NSString *> *parts = [NSMutableArray array];
+                [custom enumerateSubstringsInRange:NSMakeRange(0, custom.length)
+                    options:NSStringEnumerationByComposedCharacterSequences
+                    usingBlock:^(NSString *sub, NSRange sr, NSRange er, BOOL *stop) {
+                        NSString *tr = [sub stringByTrimmingCharactersInSet:
+                                        [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+                        if (tr.length > 0) [parts addObject:sub];
+                    }];
+                emoji = parts.count ? parts[parts.count / 2] : @"✨";
+                styleKey = 7000 + (NSInteger)((NSUInteger)[custom hash] % 100000);
+            } else if (pStyle == 6) {
+                // 自动：按月份选季节。
+                NSInteger m = [[NSCalendar currentCalendar] component:NSCalendarUnitMonth fromDate:[NSDate date]];
+                emoji = (m == 12 || m <= 2) ? @"❄️" : (m <= 5 ? @"🌸" : (m <= 8 ? @"⭐" : @"🍂"));
+                styleKey = 600 + m;
+            } else {
+                NSArray<NSString *> *pool = @[@"", @"❄️", @"🌸", @"🍂", @"⭐", @"❤️"];
+                emoji = pool[(NSUInteger)pStyle < pool.count ? (NSUInteger)pStyle : 1];
+            }
+            if (e.lastParticleKey != styleKey) {
+                e.lastParticleKey = styleKey;
+                UIImage *sprite = axs_notifyliquid_emojiImage(emoji, 24.0);
+                CAEmitterCell *pCell = [CAEmitterCell emitterCell];
+                pCell.contents = (__bridge id)sprite.CGImage;
+                pCell.birthRate = 3.5f;
+                pCell.lifetime = 5.0f;
+                pCell.velocity = 32.0f;
+                pCell.velocityRange = 14.0f;
+                pCell.emissionLongitude = M_PI_2;   // 向下飘落
+                pCell.emissionRange = M_PI / 6.0;
+                pCell.spin = 0.5f;
+                pCell.spinRange = 1.2f;
+                pCell.alphaSpeed = -0.12f;
+                e.season.emitterCells = @[pCell];
+            }
+            double pSize = [config axs_notifyliquid_particleSize];
+            CAEmitterCell *pc = e.season.emitterCells.firstObject;
+            if (pc) {
+                pc.scale = (float)(0.5 * pSize);
+                pc.scaleRange = (float)(0.2 * pSize);
+            }
+        } else if (e.season.opacity != 0) {
+            e.season.opacity = 0;
         }
     }
 

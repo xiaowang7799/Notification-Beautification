@@ -23,6 +23,14 @@
     [[AxsNotifyLiquidAnimator axs_notifyliquid_shared] axs_notifyliquid_refreshForView:self];
 }
 
+- (void)willMoveToWindow:(UIWindow *)newWindow {
+    %orig;
+    if (!newWindow) {
+        // 即将离场：液态溶解（叠加在系统划走动画上）。
+        [[AxsNotifyLiquidAnimator axs_notifyliquid_shared] axs_notifyliquid_dissolveForView:self];
+    }
+}
+
 - (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
     %orig;
     // 触摸发光（touch glow）：高光脉冲 + 微挤压。
@@ -46,6 +54,13 @@
 - (void)layoutSubviews {
     %orig;
     [[AxsNotifyLiquidAnimator axs_notifyliquid_shared] axs_notifyliquid_refreshForView:self];
+}
+
+- (void)willMoveToWindow:(UIWindow *)newWindow {
+    %orig;
+    if (!newWindow) {
+        [[AxsNotifyLiquidAnimator axs_notifyliquid_shared] axs_notifyliquid_dissolveForView:self];
+    }
 }
 
 - (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {

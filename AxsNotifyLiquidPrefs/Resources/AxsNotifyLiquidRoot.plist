@@ -136,6 +136,92 @@
 
         <dict>
             <key>cell</key><string>PSGroupCell</string>
+            <key>label</key><string>配色智能</string>
+            <key>footerText</key><string>「图标取色」= 每条通知渐变跟随该 App 图标主色；「壁纸取色」= 跟随桌面壁纸主色。</string>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSSegmentCell</string>
+            <key>label</key><string>配色来源</string>
+            <key>key</key><string>color_source</string>
+            <key>defaults</key><string>com.axs.notifyliquid</string>
+            <key>default</key><integer>0</integer>
+            <key>validValues</key>
+            <array>
+                <integer>0</integer>
+                <integer>1</integer>
+                <integer>2</integer>
+            </array>
+            <key>validTitles</key>
+            <array>
+                <string>手动</string>
+                <string>图标</string>
+                <string>壁纸</string>
+            </array>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSSwitchCell</string>
+            <key>label</key><string>深色模式自动压暗</string>
+            <key>key</key><string>dark_dim</string>
+            <key>defaults</key><string>com.axs.notifyliquid</string>
+            <key>default</key><false/>
+        </dict>
+
+        <dict>
+            <key>cell</key><string>PSGroupCell</string>
+            <key>label</key><string>粒子特效（通知内飘落）</string>
+            <key>footerText</key><string>「自动」按季节换（冬❄️/春🌸/夏⭐/秋🍂）；「自定义」用下方输入的 emoji，多个取中间一个。</string>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSSegmentCell</string>
+            <key>label</key><string>粒子样式</string>
+            <key>key</key><string>particle_style</string>
+            <key>defaults</key><string>com.axs.notifyliquid</string>
+            <key>default</key><integer>0</integer>
+            <key>validValues</key>
+            <array>
+                <integer>0</integer>
+                <integer>1</integer>
+                <integer>2</integer>
+                <integer>3</integer>
+                <integer>4</integer>
+                <integer>5</integer>
+                <integer>6</integer>
+                <integer>7</integer>
+            </array>
+            <key>validTitles</key>
+            <array>
+                <string>关</string>
+                <string>❄️</string>
+                <string>🌸</string>
+                <string>🍂</string>
+                <string>⭐</string>
+                <string>❤️</string>
+                <string>自动</string>
+                <string>自定义</string>
+            </array>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSTitleValueCell</string>
+            <key>cellClass</key><string>AxsNotifyLiquidSliderCell</string>
+            <key>label</key><string>粒子大小</string>
+            <key>key</key><string>particle_size</string>
+            <key>defaults</key><string>com.axs.notifyliquid</string>
+            <key>default</key><real>1.0</real>
+            <key>min</key><real>0.5</real>
+            <key>max</key><real>2.0</real>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSTitleValueCell</string>
+            <key>cellClass</key><string>AxsNotifyLiquidTextFieldCell</string>
+            <key>label</key><string>自定义粒子 emoji</string>
+            <key>key</key><string>particle_custom</string>
+            <key>defaults</key><string>com.axs.notifyliquid</string>
+            <key>default</key><string>✨</string>
+            <key>placeholder</key><string>如 🎉（选「自定义」档生效）</string>
+        </dict>
+
+        <dict>
+            <key>cell</key><string>PSGroupCell</string>
             <key>label</key><string>动画反馈</string>
             <key>footerText</key><string>出现动画：果冻弹跳 / 除雾渐显 / 挤压拉伸 / 凝胶膨胀。</string>
         </dict>
@@ -176,6 +262,30 @@
             <key>cell</key><string>PSSwitchCell</string>
             <key>label</key><string>触摸反馈（渐变闪亮 + 微挤压）</string>
             <key>key</key><string>touch_glow_on</string>
+            <key>defaults</key><string>com.axs.notifyliquid</string>
+            <key>default</key><false/>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSSwitchCell</string>
+            <key>label</key><string>到达粒子爆发</string>
+            <key>key</key><string>burst_on</string>
+            <key>defaults</key><string>com.axs.notifyliquid</string>
+            <key>default</key><false/>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSTitleValueCell</string>
+            <key>cellClass</key><string>AxsNotifyLiquidSliderCell</string>
+            <key>label</key><string>爆发强度</string>
+            <key>key</key><string>burst_intensity</string>
+            <key>defaults</key><string>com.axs.notifyliquid</string>
+            <key>default</key><real>1.0</real>
+            <key>min</key><real>0.2</real>
+            <key>max</key><real>2.0</real>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSSwitchCell</string>
+            <key>label</key><string>消失消散（划走溶解）</string>
+            <key>key</key><string>dissolve_on</string>
             <key>defaults</key><string>com.axs.notifyliquid</string>
             <key>default</key><false/>
         </dict>

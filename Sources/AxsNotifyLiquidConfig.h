@@ -25,6 +25,18 @@
 // 界面净化：隐藏「通知中心」标题字、隐藏「清除所有通知」按钮。
 - (BOOL)axs_notifyliquid_hideNcTitle;
 - (BOOL)axs_notifyliquid_hideClearAll;
+// 配色来源：0=手动双色 1=跟随应用图标 2=跟随壁纸。
+- (NSInteger)axs_notifyliquid_colorSource;
+// 深色模式自动压暗。
+- (BOOL)axs_notifyliquid_darkDim;
+// 到达粒子爆发 / 消失消散。
+- (BOOL)axs_notifyliquid_burstOn;
+- (double)axs_notifyliquid_burstIntensity;
+- (BOOL)axs_notifyliquid_dissolveOn;
+// 粒子特效：0=关 1=❄️ 2=🌸 3=🍂 4=⭐ 5=❤️ 6=自动 7=自定义。
+- (NSInteger)axs_notifyliquid_particleStyle;
+- (double)axs_notifyliquid_particleSize;
+- (NSString *)axs_notifyliquid_particleCustom;
 // Generic accessors.
 - (id)axs_notifyliquid_valueForKey:(NSString *)key defaultValue:(id)defaultValue;
 - (void)axs_notifyliquid_reload;
