@@ -1,5 +1,6 @@
 #import "AxsNotifyLiquidAnimator.h"
 #import "AxsNotifyLiquidConfig.h"
+#import "AxsNotifyLiquidPreferences.h"
 #import <QuartzCore/QuartzCore.h>
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
@@ -214,6 +215,8 @@ static UIImageView *axs_notifyliquid_findIconView(UIView *view, int depth) {
 @property (nonatomic, strong) NSMutableArray<AxsNotifyLiquidEffect *> *effects;
 @property (nonatomic, strong) CADisplayLink *link;
 @property (nonatomic, assign) CFTimeInterval phase;
+@property (nonatomic, assign) NSUInteger frameCounter;   // 帧计数（降频更新用）
+@property (nonatomic, strong) id prefsObserver;          // 配置变更→重启 tick
 @end
 
 @implementation AxsNotifyLiquidAnimator
@@ -233,6 +236,19 @@ static UIImageView *axs_notifyliquid_findIconView(UIView *view, int depth) {
         _effects = [NSMutableArray array];
         // 充电特效需要电池状态。
         [UIDevice currentDevice].batteryMonitoringEnabled = YES;
+        // 空闲停表后，配置变更时重新拉起 tick（弱引用防循环）。
+        __weak AxsNotifyLiquidAnimator *weakSelf = self;
+        _prefsObserver = [[NSNotificationCenter defaultCenter]
+            addObserverForName:AxsNotifyLiquidPreferencesChanged
+                        object:nil
+                         queue:[NSOperationQueue mainQueue]
+                    usingBlock:^(NSNotification *note) {
+            (void)note;
+            AxsNotifyLiquidAnimator *strongSelf = weakSelf;
+            if (strongSelf && strongSelf.effects.count > 0) {
+                [strongSelf axs_notifyliquid_ensureLink];
+            }
+        }];
     }
     return self;
 }
@@ -597,18 +613,40 @@ static UIImageView *axs_notifyliquid_findIconView(UIView *view, int depth) {
         return;
     }
     double t = self.phase += link.duration > 0 ? link.duration : 1.0 / 30.0;
+    NSUInteger fc = self.frameCounter++;
+    BOOL slowTick = ((fc % 3) == 0);     // 渐变颜色/位点分配：10Hz（慢动画足够）
+    BOOL paramTick = ((fc % 10) == 0);   // 粒子参数/发射几何：3Hz
+    float dt = (float)(link.duration > 0 ? link.duration : 1.0 / 30.0);
 
-    [CATransaction begin];
-    [CATransaction setDisableActions:YES];
-
+    // ── tick 级配置快照：每帧只查一次配置，循环内零字典查询 ──
     BOOL gradientOn = [config axs_notifyliquid_gradientOn];
-    // 低电量保护：降粒子密度、降吐泡频率、关充电特效。
-    BOOL lowPower = [config axs_notifyliquid_lowPowerGuard]
-                    && [NSProcessInfo processInfo].isLowPowerModeEnabled;
+    BOOL darkDim = [config axs_notifyliquid_darkDim];
+    NSInteger colorSource = [config axs_notifyliquid_colorSource];
+    BOOL fishOn = [config axs_notifyliquid_fishOn];
+    NSInteger fishCount = [config axs_notifyliquid_fishCount];
+    double fishSize = [config axs_notifyliquid_fishSize];
+    double bubbleSize = [config axs_notifyliquid_bubbleSize];
+    double bubbleOpacity = [config axs_notifyliquid_bubbleOpacity];
+    BOOL chargeOn = [config axs_notifyliquid_chargeFx];
+    BOOL particleOn = [config axs_notifyliquid_particleOn];
+    NSInteger pDir = [config axs_notifyliquid_particleDir];
+    double pSize = [config axs_notifyliquid_particleSize];
+    double density = [config axs_notifyliquid_particleDensity];
     double gSpeed = [config axs_notifyliquid_gradientSpeed];
     double gOpacity = [config axs_notifyliquid_gradientOpacity];
     double hue1 = [config axs_notifyliquid_gradientHue1];
     double hue2 = [config axs_notifyliquid_gradientHue2];
+    // 低电量保护：降粒子密度、降吐泡频率、关充电特效。
+    BOOL lowPower = [config axs_notifyliquid_lowPowerGuard]
+                    && [NSProcessInfo processInfo].isLowPowerModeEnabled;
+    BOOL charging = NO;
+    if (chargeOn && !lowPower) {
+        UIDeviceBatteryState bs = [UIDevice currentDevice].batteryState;
+        charging = (bs == UIDeviceBatteryStateCharging || bs == UIDeviceBatteryStateFull);
+    }
+
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
 
     for (NSInteger i = (NSInteger)self.effects.count - 1; i >= 0; i--) {
         AxsNotifyLiquidEffect *e = self.effects[(NSUInteger)i];
@@ -625,239 +663,236 @@ static UIImageView *axs_notifyliquid_findIconView(UIView *view, int depth) {
         // 流动渐变：配色来源（手动双色 / 应用图标取色 / 壁纸取色）+ 色相漂移 + 位点往复。
         if (gradientOn) {
             double dim = 1.0;
-            if ([config axs_notifyliquid_darkDim]) {
+            if (darkDim) {
                 if (@available(iOS 12.0, *)) {
                     if (v.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark) dim = 0.72;
                 }
             }
             e.gradient.opacity = (float)(gOpacity * dim);
-            UIColor *c1, *c2, *cm;
-            NSInteger source = [config axs_notifyliquid_colorSource];
-            if (source == 1 && e.iconColor) {
-                // 应用图标取色：同色系微漂移（每条通知专属色）。
-                CGFloat h, s, b;
-                [e.iconColor getHue:&h saturation:&s brightness:&b alpha:nil];
-                c1 = [UIColor colorWithHue:(CGFloat)fmod(h + 0.05 + t * 0.02, 1.0) saturation:MAX(s, 0.5f) brightness:1 alpha:1];
-                c2 = [UIColor colorWithHue:(CGFloat)fmod(h - 0.05 + t * 0.02, 1.0) saturation:MAX(s, 0.5f) brightness:1 alpha:1];
-                cm = [UIColor colorWithHue:(CGFloat)fmod(h + t * 0.02, 1.0) saturation:MAX(s, 0.5f) brightness:1 alpha:1];
-            } else if (source == 2) {
-                // 壁纸取色：主色 ± 微漂移。
-                UIColor *wp = axs_notifyliquid_wallpaperColor();
-                CGFloat h = 0.6f, s = 0.5f;
-                if (wp) [wp getHue:&h saturation:NULL brightness:NULL alpha:nil];
-                c1 = [UIColor colorWithHue:(CGFloat)fmod(h + 0.06 + t * 0.02, 1.0) saturation:MAX(s, 0.4f) brightness:1 alpha:1];
-                c2 = [UIColor colorWithHue:(CGFloat)fmod(h - 0.06 + t * 0.02, 1.0) saturation:MAX(s, 0.4f) brightness:1 alpha:1];
-                cm = [UIColor colorWithHue:(CGFloat)fmod(h + t * 0.02, 1.0) saturation:MAX(s, 0.4f) brightness:1 alpha:1];
-            } else {
-                c1 = [UIColor colorWithHue:(CGFloat)fmod(hue1 + t * 0.04, 1.0) saturation:0.75 brightness:1 alpha:1];
-                c2 = [UIColor colorWithHue:(CGFloat)fmod(hue2 + t * 0.04, 1.0) saturation:0.75 brightness:1 alpha:1];
-                cm = [UIColor colorWithHue:(CGFloat)fmod((hue1 + hue2) / 2.0 + t * 0.04, 1.0) saturation:0.75 brightness:1 alpha:1];
-            }
-            // 流动优化：渐变轴缓慢旋转（液态感）+ 色带波浪推移（两端固定不卡顿）。
+            // 轴向缓慢旋转（便宜，逐帧）。
             double ang = t * 0.12;
             e.gradient.startPoint = CGPointMake(0.5 + 0.5 * cos(ang), 0.5 + 0.5 * sin(ang));
             e.gradient.endPoint = CGPointMake(0.5 - 0.5 * cos(ang), 0.5 - 0.5 * sin(ang));
-            double wave = (sin(t * gSpeed * 1.8 + e.fishSeed) + 1.0) / 2.0;   // 0..1（每条通知错相）
-            double w1 = 0.18 + 0.22 * wave;                       // 中间两色位置推移
-            e.gradient.locations = @[@0, @(w1), @(1.0 - w1), @1];
-            e.gradient.colors = @[(id)c1.CGColor, (id)cm.CGColor, (id)c2.CGColor, (id)cm.CGColor];
+            // 颜色/位点需要分配 NSArray/UIColor —— 降到 10Hz（色带推移肉眼仍顺滑）。
+            if (slowTick) {
+                UIColor *c1, *c2, *cm;
+                if (colorSource == 1 && e.iconColor) {
+                    // 应用图标取色：同色系微漂移（每条通知专属色）。
+                    CGFloat h, s, b;
+                    [e.iconColor getHue:&h saturation:&s brightness:&b alpha:nil];
+                    c1 = [UIColor colorWithHue:(CGFloat)fmod(h + 0.05 + t * 0.02, 1.0) saturation:MAX(s, 0.5f) brightness:1 alpha:1];
+                    c2 = [UIColor colorWithHue:(CGFloat)fmod(h - 0.05 + t * 0.02, 1.0) saturation:MAX(s, 0.5f) brightness:1 alpha:1];
+                    cm = [UIColor colorWithHue:(CGFloat)fmod(h + t * 0.02, 1.0) saturation:MAX(s, 0.5f) brightness:1 alpha:1];
+                } else if (colorSource == 2) {
+                    // 壁纸取色：主色 ± 微漂移。
+                    UIColor *wp = axs_notifyliquid_wallpaperColor();
+                    CGFloat h = 0.6f, s = 0.5f;
+                    if (wp) [wp getHue:&h saturation:NULL brightness:NULL alpha:nil];
+                    c1 = [UIColor colorWithHue:(CGFloat)fmod(h + 0.06 + t * 0.02, 1.0) saturation:MAX(s, 0.4f) brightness:1 alpha:1];
+                    c2 = [UIColor colorWithHue:(CGFloat)fmod(h - 0.06 + t * 0.02, 1.0) saturation:MAX(s, 0.4f) brightness:1 alpha:1];
+                    cm = [UIColor colorWithHue:(CGFloat)fmod(h + t * 0.02, 1.0) saturation:MAX(s, 0.4f) brightness:1 alpha:1];
+                } else {
+                    c1 = [UIColor colorWithHue:(CGFloat)fmod(hue1 + t * 0.04, 1.0) saturation:0.75 brightness:1 alpha:1];
+                    c2 = [UIColor colorWithHue:(CGFloat)fmod(hue2 + t * 0.04, 1.0) saturation:0.75 brightness:1 alpha:1];
+                    cm = [UIColor colorWithHue:(CGFloat)fmod((hue1 + hue2) / 2.0 + t * 0.04, 1.0) saturation:0.75 brightness:1 alpha:1];
+                }
+                // 色带波浪推移（每条通知错相，两端固定不卡顿）。
+                double wave = (sin(t * gSpeed * 1.8 + e.fishSeed) + 1.0) / 2.0;
+                double w1 = 0.18 + 0.22 * wave;
+                e.gradient.locations = @[@0, @(w1), @(1.0 - w1), @1];
+                e.gradient.colors = @[(id)c1.CGColor, (id)cm.CGColor, (id)c2.CGColor, (id)cm.CGColor];
+            }
         } else if (e.gradient.opacity != 0) {
             e.gradient.opacity = 0;
         }
 
         // 鱼缸游鱼：前 fish_count 条可见，正弦游动 + 方向翻转（数量/大小实时生效）。
-        BOOL fishOn = [config axs_notifyliquid_fishOn];
-        NSInteger fishCount = [config axs_notifyliquid_fishCount];
-        double fishSize = [config axs_notifyliquid_fishSize];
-        for (NSInteger fi = 0; fi < (NSInteger)e.fishLayers.count; fi++) {
-            CALayer *fish = e.fishLayers[(NSUInteger)fi];
-            if (!fishOn || fi >= fishCount) {
+        if (fishOn) {
+            double fishCountD = (double)fishCount;
+            for (NSInteger fi = 0; fi < (NSInteger)e.fishLayers.count; fi++) {
+                CALayer *fish = e.fishLayers[(NSUInteger)fi];
+                if (fi >= fishCountD) {
+                    if (fish.opacity != 0) fish.opacity = 0;
+                    continue;
+                }
+                if (fish.opacity != 0.9f) fish.opacity = 0.9f;
+                CGFloat displaySize = (CGFloat)(22.0 * fishSize);
+                if (paramTick) {
+                    fish.bounds = CGRectMake(0, 0, displaySize, displaySize);
+                }
+                double speed = 0.35 + (fi % 4) * 0.09;
+                double phase = (t + e.fishSeed) * speed + fi * 1.3;
+                CGRect b = v.bounds;
+                CGFloat fishX = (CGFloat)(sin(phase) * b.size.width * 0.32) + CGRectGetMidX(b);
+                CGFloat fishY = (CGFloat)(cos(phase * 0.7) * 7.0) + b.size.height * (0.40 + 0.09 * (fi % 3));
+                fish.position = CGPointMake(fishX, fishY);
+                // 方向翻转：鱼图头朝左，向右游（cos>0）时镜像。
+                fish.transform = cos(phase) > 0 ? CATransform3DMakeScale(-1, 1, 1) : CATransform3DIdentity;
+
+                // 鱼吐泡泡：倒计时到 0 时从嘴边冒一个泡泡，上浮渐隐后自清。
+                if (fi < (NSInteger)e.fishNextBubble.count) {
+                    double remain = [e.fishNextBubble[(NSUInteger)fi] doubleValue] - (double)dt;
+                    if (remain <= 0) {
+                        remain = (1.4 + ((double)arc4random() / UINT32_MAX) * 1.8) * (lowPower ? 2.0 : 1.0);
+                        CGFloat bs = (CGFloat)((3.5 + fishSize * 2.5) * bubbleSize);
+                        CALayer *bub = [CALayer layer];
+                        bub.bounds = CGRectMake(0, 0, bs, bs);
+                        bub.cornerRadius = bs / 2.0;
+                        bub.borderWidth = 1.1;
+                        bub.borderColor = [UIColor colorWithWhite:1 alpha:(CGFloat)(0.8 * bubbleOpacity)].CGColor;
+                        bub.backgroundColor = [UIColor colorWithWhite:1 alpha:(CGFloat)(0.18 * bubbleOpacity)].CGColor;
+                        CGFloat dir = cos(phase) < 0 ? -1 : 1;
+                        bub.position = CGPointMake(fish.position.x + dir * displaySize * 0.42,
+                                                   fish.position.y - displaySize * 0.12);
+                        bub.zPosition = 7;
+                        [v.layer addSublayer:bub];
+                        CABasicAnimation *rise = [CABasicAnimation animationWithKeyPath:@"position.y"];
+                        rise.fromValue = @(bub.position.y);
+                        rise.toValue = @(bub.position.y - 42);
+                        CABasicAnimation *bfade = [CABasicAnimation animationWithKeyPath:@"opacity"];
+                        bfade.fromValue = @0.9;
+                        bfade.toValue = @0.0;
+                        CAAnimationGroup *bg = [CAAnimationGroup animation];
+                        bg.animations = @[rise, bfade];
+                        bg.duration = 2.2;
+                        bg.removedOnCompletion = YES;
+                        [bub addAnimation:bg forKey:@"axs_bubble_rise"];
+                        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.3 * NSEC_PER_SEC)),
+                                       dispatch_get_main_queue(), ^{
+                            [bub removeFromSuperlayer];
+                        });
+                    }
+                    e.fishNextBubble[(NSUInteger)fi] = @(remain);
+                }
+            }
+        } else {
+            // 关闭时只把鱼隐藏一次（之后 opacity 已为 0，零写入）。
+            for (CALayer *fish in e.fishLayers) {
                 if (fish.opacity != 0) fish.opacity = 0;
-                continue;
-            }
-            fish.opacity = 0.9f;
-            CGFloat displaySize = (CGFloat)(22.0 * fishSize);
-            fish.bounds = CGRectMake(0, 0, displaySize, displaySize);
-            double speed = 0.35 + (fi % 4) * 0.09;
-            double phase = (t + e.fishSeed) * speed + fi * 1.3;
-            CGRect b = v.bounds;
-            CGFloat fishX = (CGFloat)(sin(phase) * b.size.width * 0.32) + CGRectGetMidX(b);
-            CGFloat fishY = (CGFloat)(cos(phase * 0.7) * 7.0) + b.size.height * (0.40 + 0.09 * (fi % 3));
-            fish.position = CGPointMake(fishX, fishY);
-            // 方向翻转：鱼图头朝左，向右游（cos>0）时镜像。
-            fish.transform = cos(phase) > 0 ? CATransform3DMakeScale(-1, 1, 1) : CATransform3DIdentity;
-
-            // 鱼吐泡泡：倒计时到 0 时从嘴边冒一个泡泡，上浮渐隐后自清。
-            if (fi < (NSInteger)e.fishNextBubble.count) {
-                double remain = [e.fishNextBubble[(NSUInteger)fi] doubleValue] - (link.duration > 0 ? link.duration : 1.0 / 30.0);
-                if (remain <= 0) {
-                    remain = (1.4 + ((double)arc4random() / UINT32_MAX) * 1.8) * (lowPower ? 2.0 : 1.0);
-                    double bubbleSize = [config axs_notifyliquid_bubbleSize];
-                    double bubbleOpacity = [config axs_notifyliquid_bubbleOpacity];
-                    CGFloat bs = (CGFloat)((3.5 + fishSize * 2.5) * bubbleSize);
-                    CALayer *bub = [CALayer layer];
-                    bub.bounds = CGRectMake(0, 0, bs, bs);
-                    bub.cornerRadius = bs / 2.0;
-                    bub.borderWidth = 1.1;
-                    bub.borderColor = [UIColor colorWithWhite:1 alpha:(CGFloat)(0.8 * bubbleOpacity)].CGColor;
-                    bub.backgroundColor = [UIColor colorWithWhite:1 alpha:(CGFloat)(0.18 * bubbleOpacity)].CGColor;
-                    CGFloat dir = cos(phase) < 0 ? -1 : 1;
-                    bub.position = CGPointMake(fish.position.x + dir * displaySize * 0.42,
-                                               fish.position.y - displaySize * 0.12);
-                    bub.zPosition = 7;
-                    [v.layer addSublayer:bub];
-                    CABasicAnimation *rise = [CABasicAnimation animationWithKeyPath:@"position.y"];
-                    rise.fromValue = @(bub.position.y);
-                    rise.toValue = @(bub.position.y - 42);
-                    CABasicAnimation *bfade = [CABasicAnimation animationWithKeyPath:@"opacity"];
-                    bfade.fromValue = @0.9;
-                    bfade.toValue = @0.0;
-                    CAAnimationGroup *bg = [CAAnimationGroup animation];
-                    bg.animations = @[rise, bfade];
-                    bg.duration = 2.2;
-                    bg.removedOnCompletion = YES;
-                    [bub addAnimation:bg forKey:@"axs_bubble_rise"];
-                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.3 * NSEC_PER_SEC)),
-                                   dispatch_get_main_queue(), ^{
-                        [bub removeFromSuperlayer];
-                    });
-                }
-                e.fishNextBubble[(NSUInteger)fi] = @(remain);
             }
         }
 
-        // 充电特效：⚡ 金色火花从底部上飘（充电中且未低电量时）。
-        if ([config axs_notifyliquid_chargeFx] && !lowPower) {
-            UIDevice *dev = [UIDevice currentDevice];
-            BOOL charging = (dev.batteryState == UIDeviceBatteryStateCharging
-                             || dev.batteryState == UIDeviceBatteryStateFull);
-            if (charging) {
-                e.chargeNext -= (link.duration > 0 ? link.duration : 1.0 / 30.0);
-                if (e.chargeNext <= 0) {
-                    e.chargeNext = 1.1 + ((double)arc4random() / UINT32_MAX) * 1.2;
-                    static UIImage *sparkSprite = nil;
-                    static dispatch_once_t onceToken;
-                    dispatch_once(&onceToken, ^{
-                        sparkSprite = axs_notifyliquid_emojiImage(@"⚡", 24.0);
-                    });
-                    CGFloat ss = 14.0;
-                    CALayer *spark = [CALayer layer];
-                    spark.bounds = CGRectMake(0, 0, ss, ss);
-                    spark.contents = (__bridge id)sparkSprite.CGImage;
-                    spark.position = CGPointMake((CGFloat)(((double)arc4random() / UINT32_MAX)
-                                                          * v.bounds.size.width),
-                                                 CGRectGetMaxY(v.bounds) - 4.0);
-                    spark.zPosition = 7;
-                    [v.layer addSublayer:spark];
-                    CABasicAnimation *rise = [CABasicAnimation animationWithKeyPath:@"position.y"];
-                    rise.fromValue = @(spark.position.y);
-                    rise.toValue = @(spark.position.y - 70);
-                    CABasicAnimation *fade = [CABasicAnimation animationWithKeyPath:@"opacity"];
-                    fade.fromValue = @0.95;
-                    fade.toValue = @0.0;
-                    CAAnimationGroup *g = [CAAnimationGroup animation];
-                    g.animations = @[rise, fade];
-                    g.duration = 1.9;
-                    g.removedOnCompletion = YES;
-                    [spark addAnimation:g forKey:@"axs_charge_spark"];
-                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)),
-                                   dispatch_get_main_queue(), ^{
-                        [spark removeFromSuperlayer];
-                    });
-                }
+        // 充电特效：⚡ 金色火花从底部上飘（充电中且未低电量时，快照判定）。
+        if (charging) {
+            e.chargeNext -= (double)dt;
+            if (e.chargeNext <= 0) {
+                e.chargeNext = 1.1 + ((double)arc4random() / UINT32_MAX) * 1.2;
+                static UIImage *sparkSprite = nil;
+                static dispatch_once_t onceToken;
+                dispatch_once(&onceToken, ^{
+                    sparkSprite = axs_notifyliquid_emojiImage(@"⚡", 24.0);
+                });
+                CGFloat ss = 14.0;
+                CALayer *spark = [CALayer layer];
+                spark.bounds = CGRectMake(0, 0, ss, ss);
+                spark.contents = (__bridge id)sparkSprite.CGImage;
+                spark.position = CGPointMake((CGFloat)(((double)arc4random() / UINT32_MAX)
+                                                      * v.bounds.size.width),
+                                             CGRectGetMaxY(v.bounds) - 4.0);
+                spark.zPosition = 7;
+                [v.layer addSublayer:spark];
+                CABasicAnimation *rise = [CABasicAnimation animationWithKeyPath:@"position.y"];
+                rise.fromValue = @(spark.position.y);
+                rise.toValue = @(spark.position.y - 70);
+                CABasicAnimation *fade = [CABasicAnimation animationWithKeyPath:@"opacity"];
+                fade.fromValue = @0.95;
+                fade.toValue = @0.0;
+                CAAnimationGroup *g = [CAAnimationGroup animation];
+                g.animations = @[rise, fade];
+                g.duration = 1.9;
+                g.removedOnCompletion = YES;
+                [spark addAnimation:g forKey:@"axs_charge_spark"];
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)),
+                               dispatch_get_main_queue(), ^{
+                    [spark removeFromSuperlayer];
+                });
             }
         }
 
-        // 粒子特效（图片文件导入）：多张图用 ; 分隔轮流飘落，找不到回退 ✨；数量/大小实时。
-        BOOL particleOn = [config axs_notifyliquid_particleOn];
+        // 粒子特效（图片文件导入）：几何/参数降到 3Hz 同步（分配与 emitter 写入大头）。
         if (particleOn) {
-            e.season.frame = v.bounds;
-            e.season.opacity = 0.85f;
-            // 按方向布置发射器几何（之前只改角度不改位置：上飘从顶部射出屏幕）。
-            NSInteger pDir = [config axs_notifyliquid_particleDir];
-            CGRect pb = v.bounds;
-            if (pDir == 1) {
-                // 上飘：底部线向上。
-                e.season.emitterShape = kCAEmitterLayerLine;
-                e.season.emitterPosition = CGPointMake(CGRectGetMidX(pb), CGRectGetMaxY(pb) + 6.0);
-                e.season.emitterSize = CGSizeMake(pb.size.width, 3.0);
-            } else if (pDir == 2) {
-                // 横飘：左边线向右。
-                e.season.emitterShape = kCAEmitterLayerLine;
-                e.season.emitterPosition = CGPointMake(-6.0, CGRectGetMidY(pb));
-                e.season.emitterSize = CGSizeMake(3.0, pb.size.height);
-            } else if (pDir == 3) {
-                // 多向：中心点全方向。
-                e.season.emitterShape = kCAEmitterLayerRectangle;
-                e.season.emitterPosition = CGPointMake(CGRectGetMidX(pb), CGRectGetMidY(pb));
-                e.season.emitterSize = CGSizeMake(8.0, 8.0);
-            } else {
-                // 下落：顶部线向下。
-                e.season.emitterShape = kCAEmitterLayerLine;
-                e.season.emitterPosition = CGPointMake(CGRectGetMidX(pb), -6.0);
-                e.season.emitterSize = CGSizeMake(pb.size.width, 3.0);
-            }
-            NSString *paths = [config axs_notifyliquid_particlePng];
-            NSInteger styleKey = 9000 + (NSInteger)((NSUInteger)[paths hash] % 100000);
-            // 路径变了，或上次是回退态（文件可能后放进来）→ 2 秒重试一次。
-            CFTimeInterval now = CFAbsoluteTimeGetCurrent();
-            BOOL needRebuild = (e.lastParticleKey != styleKey);
-            if (!needRebuild && e.lastParticleKey == -1 && now - e.lastLoadAttempt > 2.0) {
-                needRebuild = YES;
-            }
-            if (needRebuild) {
-                e.lastLoadAttempt = now;
-                // 从文件导入图片（最多 6 张，全部加载失败回退 ✨）。
-                NSMutableArray<UIImage *> *sprites = [NSMutableArray array];
-                for (NSString *raw in [paths componentsSeparatedByString:@";"]) {
-                    NSString *p = [raw stringByTrimmingCharactersInSet:
-                                   [NSCharacterSet whitespaceAndNewlineCharacterSet]];
-                    if (p.length == 0) continue;
-                    UIImage *img = [UIImage imageWithContentsOfFile:p];
-                    if (img) [sprites addObject:img];
-                    if (sprites.count >= 6) break;
-                }
-                if (sprites.count == 0) {
-                    // 回退 ✨ 并标记回退态（lastParticleKey = -1），后续定时重试。
-                    [sprites addObject:axs_notifyliquid_emojiImage(@"✨", 24.0)];
-                    e.lastParticleKey = -1;
+            if (e.season.opacity != 0.85f) e.season.opacity = 0.85f;
+            if (paramTick) {
+                e.season.frame = v.bounds;
+                // 按方向布置发射器几何。
+                CGRect pb = v.bounds;
+                if (pDir == 1) {
+                    e.season.emitterShape = kCAEmitterLayerLine;
+                    e.season.emitterPosition = CGPointMake(CGRectGetMidX(pb), CGRectGetMaxY(pb) + 6.0);
+                    e.season.emitterSize = CGSizeMake(pb.size.width, 3.0);
+                } else if (pDir == 2) {
+                    e.season.emitterShape = kCAEmitterLayerLine;
+                    e.season.emitterPosition = CGPointMake(-6.0, CGRectGetMidY(pb));
+                    e.season.emitterSize = CGSizeMake(3.0, pb.size.height);
+                } else if (pDir == 3) {
+                    e.season.emitterShape = kCAEmitterLayerRectangle;
+                    e.season.emitterPosition = CGPointMake(CGRectGetMidX(pb), CGRectGetMidY(pb));
+                    e.season.emitterSize = CGSizeMake(8.0, 8.0);
                 } else {
-                    e.lastParticleKey = styleKey;
+                    e.season.emitterShape = kCAEmitterLayerLine;
+                    e.season.emitterPosition = CGPointMake(CGRectGetMidX(pb), -6.0);
+                    e.season.emitterSize = CGSizeMake(pb.size.width, 3.0);
                 }
-                // 每张图一个 cell，混合飘落。
-                NSMutableArray<CAEmitterCell *> *cells = [NSMutableArray array];
-                for (UIImage *sp in sprites) {
-                    CAEmitterCell *pCell = [CAEmitterCell emitterCell];
-                    pCell.contents = (__bridge id)sp.CGImage;
-                    // 寿命/速度随机抖动：各通知发射图案不同步。
-                    pCell.lifetime = 4.6f + ((float)arc4random() / UINT32_MAX) * 1.2f;
-                    pCell.velocity = 28.0f + ((float)arc4random() / UINT32_MAX) * 10.0f;
-                    pCell.velocityRange = 14.0f;
-                    pCell.emissionLongitude = M_PI_2;   // 向下飘落
-                    pCell.emissionRange = M_PI / 6.0;
-                    pCell.spin = 0.5f;
-                    pCell.spinRange = 1.2f;
-                    pCell.alphaSpeed = -0.12f;
-                    [cells addObject:pCell];
+                NSString *paths = [config axs_notifyliquid_particlePng];
+                NSInteger styleKey = 9000 + (NSInteger)((NSUInteger)[paths hash] % 100000);
+                // 路径变了，或上次是回退态（文件可能后放进来）→ 2 秒重试一次。
+                CFTimeInterval now = CFAbsoluteTimeGetCurrent();
+                BOOL needRebuild = (e.lastParticleKey != styleKey);
+                if (!needRebuild && e.lastParticleKey == -1 && now - e.lastLoadAttempt > 2.0) {
+                    needRebuild = YES;
                 }
-                e.season.emitterCells = cells;
-            }
-            // 数量（密度）/ 大小 / 发射角 实时同步（pDir 见上方几何段）。
-            double pSize = [config axs_notifyliquid_particleSize];
-            double density = [config axs_notifyliquid_particleDensity];
-            NSArray<CAEmitterCell *> *cells = e.season.emitterCells;
-            float perRate = (float)(3.5 * density * (lowPower ? 0.4 : 1.0) * e.particleJitter
-                                    / (double)MAX((NSUInteger)1, cells.count));
-            double pLongitude = (pDir == 1) ? -M_PI_2 : ((pDir == 2) ? 0.0 : M_PI_2);
-            double pRange = (pDir == 3) ? M_PI * 2 : M_PI / 6.0;   // 多向 = 全方向发散
-            float pVelocity = (pDir == 2) ? 26.0f : ((pDir == 3) ? 36.0f : 32.0f);
-            for (CAEmitterCell *pc in cells) {
-                pc.birthRate = perRate;
-                pc.scale = (float)(0.5 * pSize);
-                pc.scaleRange = (float)(0.2 * pSize);
-                pc.emissionLongitude = pLongitude;
-                pc.emissionRange = pRange;
-                pc.velocity = (float)(pVelocity * e.particleJitter);   // 各通知速度不同步
+                if (needRebuild) {
+                    e.lastLoadAttempt = now;
+                    // 从文件导入图片（最多 6 张，全部加载失败回退 ✨）。
+                    NSMutableArray<UIImage *> *sprites = [NSMutableArray array];
+                    for (NSString *raw in [paths componentsSeparatedByString:@";"]) {
+                        NSString *p = [raw stringByTrimmingCharactersInSet:
+                                       [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+                        if (p.length == 0) continue;
+                        UIImage *img = [UIImage imageWithContentsOfFile:p];
+                        if (img) [sprites addObject:img];
+                        if (sprites.count >= 6) break;
+                    }
+                    if (sprites.count == 0) {
+                        // 回退 ✨ 并标记回退态（lastParticleKey = -1），后续定时重试。
+                        [sprites addObject:axs_notifyliquid_emojiImage(@"✨", 24.0)];
+                        e.lastParticleKey = -1;
+                    } else {
+                        e.lastParticleKey = styleKey;
+                    }
+                    // 每张图一个 cell，混合飘落。
+                    NSMutableArray<CAEmitterCell *> *cells = [NSMutableArray array];
+                    for (UIImage *sp in sprites) {
+                        CAEmitterCell *pCell = [CAEmitterCell emitterCell];
+                        pCell.contents = (__bridge id)sp.CGImage;
+                        // 寿命/速度随机抖动：各通知发射图案不同步。
+                        pCell.lifetime = 4.6f + ((float)arc4random() / UINT32_MAX) * 1.2f;
+                        pCell.velocity = 28.0f + ((float)arc4random() / UINT32_MAX) * 10.0f;
+                        pCell.velocityRange = 14.0f;
+                        pCell.emissionLongitude = M_PI_2;   // 向下飘落
+                        pCell.emissionRange = M_PI / 6.0;
+                        pCell.spin = 0.5f;
+                        pCell.spinRange = 1.2f;
+                        pCell.alphaSpeed = -0.12f;
+                        [cells addObject:pCell];
+                    }
+                    e.season.emitterCells = cells;
+                }
+                // 数量（密度）/ 大小 / 发射角 同步（3Hz 足够，滑块响应延迟 ≤0.33s）。
+                NSArray<CAEmitterCell *> *cells = e.season.emitterCells;
+                float perRate = (float)(3.5 * density * (lowPower ? 0.4 : 1.0) * e.particleJitter
+                                        / (double)MAX((NSUInteger)1, cells.count));
+                double pLongitude = (pDir == 1) ? -M_PI_2 : ((pDir == 2) ? 0.0 : M_PI_2);
+                double pRange = (pDir == 3) ? M_PI * 2 : M_PI / 6.0;   // 多向 = 全方向发散
+                float pVelocity = (pDir == 2) ? 26.0f : ((pDir == 3) ? 36.0f : 32.0f);
+                for (CAEmitterCell *pc in cells) {
+                    pc.birthRate = perRate;
+                    pc.scale = (float)(0.5 * pSize);
+                    pc.scaleRange = (float)(0.2 * pSize);
+                    pc.emissionLongitude = pLongitude;
+                    pc.emissionRange = pRange;
+                    pc.velocity = (float)(pVelocity * e.particleJitter);   // 各通知速度不同步
+                }
             }
         } else if (e.season.opacity != 0) {
             e.season.opacity = 0;
@@ -866,10 +901,17 @@ static UIImageView *axs_notifyliquid_findIconView(UIView *view, int depth) {
 
     [CATransaction commit];
 
-    if (self.effects.count == 0) [self axs_notifyliquid_stopLink];
+    if (self.effects.count == 0) { [self axs_notifyliquid_stopLink]; return; }
+    // 全关：停表省电（配置变更通知 / 新通知挂载会自动重启）。
+    if (!gradientOn && !fishOn && !particleOn && !charging) {
+        [self axs_notifyliquid_stopLink];
+    }
 }
 
 - (void)dealloc {
+    if (self.prefsObserver) {
+        [[NSNotificationCenter defaultCenter] removeObserver:self.prefsObserver];
+    }
     [self axs_notifyliquid_stopLink];
 }
 
