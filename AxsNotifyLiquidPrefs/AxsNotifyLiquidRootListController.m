@@ -110,4 +110,18 @@
     [self setPreferenceValue:@(fmax(minimum, fmin(maximum, value))) specifier:specifier];
 }
 
+// 打开素材文件夹（不存在则创建），跳 Filza。素材放这里，路径填
+// /var/mobile/Documents/NotifyLiquid/文件名.png 即可。
+- (void)axs_notifyliquid_openAssetsFolder:(id)sender {
+    NSString *dir = @"/var/mobile/Documents/NotifyLiquid";
+    [[NSFileManager defaultManager] createDirectoryAtPath:dir
+                              withIntermediateDirectories:YES
+                                               attributes:nil
+                                                    error:nil];
+    NSURL *url = [NSURL URLWithString:[@"filza://" stringByAppendingString:dir]];
+    if (url) {
+        [[UIApplication sharedApplication] openURL:url options:@{} completionHandler:nil];
+    }
+}
+
 @end

@@ -149,7 +149,12 @@
         <dict>
             <key>cell</key><string>PSGroupCell</string>
             <key>label</key><string>粒子特效（图片导入）</string>
-            <key>footerText</key><string>粒子用图片文件：多张图路径用 ; 分隔轮流飘落；找不到文件自动回退 ✨。</string>
+            <key>footerText</key><string>素材放 /var/mobile/Documents/NotifyLiquid/ 里，路径就填 /var/mobile/Documents/NotifyLiquid/文件名.png；多张用 ; 分隔；找不到文件自动回退 ✨。</string>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSButtonCell</string>
+            <key>label</key><string>📁 打开素材文件夹（放入 PNG）</string>
+            <key>action</key><string>axs_notifyliquid_openAssetsFolder:</string>
         </dict>
         <dict>
             <key>cell</key><string>PSSwitchCell</string>
@@ -164,8 +169,8 @@
             <key>label</key><string>📂 图片路径(点标签跳Filza)</string>
             <key>key</key><string>particle_png</string>
             <key>defaults</key><string>com.axs.notifyliquid</string>
-            <key>default</key><string></string>
-            <key>placeholder</key><string>多张用 ; 分隔，如 p1.png;p2.png</string>
+            <key>default</key><string>/var/mobile/Documents/NotifyLiquid/particle.png</string>
+            <key>placeholder</key><string>多张用 ; 分隔</string>
             <key>filza</key><true/>
         </dict>
         <dict>
@@ -257,7 +262,7 @@
             <key>label</key><string>📂 爆发图片(点标签跳Filza)</string>
             <key>key</key><string>burst_png</string>
             <key>defaults</key><string>com.axs.notifyliquid</string>
-            <key>default</key><string></string>
+            <key>default</key><string>/var/mobile/Documents/NotifyLiquid/burst.png</string>
             <key>placeholder</key><string>留空用默认光点</string>
             <key>filza</key><true/>
         </dict>
