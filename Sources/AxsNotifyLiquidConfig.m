@@ -86,11 +86,19 @@ static BOOL axs_notifyliquid_bool(id value, BOOL def) {
 - (double)axs_notifyliquid_gradientOpacity {
     return axs_notifyliquid_clamped([self axs_notifyliquid_valueForKey:@"gradient_opacity" defaultValue:nil], 0.35, 0.05, 1.0);
 }
-- (BOOL)axs_notifyliquid_elasticOn {
-    return axs_notifyliquid_bool([self axs_notifyliquid_valueForKey:@"elastic_on" defaultValue:nil], NO);
+// 出现动画模式（旧键 elastic_on 兼容：1=果冻弹跳）。
+- (NSInteger)axs_notifyliquid_appearMode {
+    id v = [self axs_notifyliquid_valueForKey:@"appear_mode" defaultValue:nil];
+    if (![v isKindOfClass:[NSNumber class]]) {
+        return axs_notifyliquid_bool([self axs_notifyliquid_valueForKey:@"elastic_on" defaultValue:nil], NO) ? 1 : 0;
+    }
+    return (NSInteger)axs_notifyliquid_clamped(v, 1.0, 0.0, 4.0);
 }
-- (double)axs_notifyliquid_elasticIntensity {
+- (double)axs_notifyliquid_appearIntensity {
     return axs_notifyliquid_clamped([self axs_notifyliquid_valueForKey:@"elastic_intensity" defaultValue:nil], 1.0, 0.2, 2.0);
+}
+- (BOOL)axs_notifyliquid_touchGlowOn {
+    return axs_notifyliquid_bool([self axs_notifyliquid_valueForKey:@"touch_glow_on" defaultValue:nil], NO);
 }
 - (BOOL)axs_notifyliquid_glassOn {
     return axs_notifyliquid_bool([self axs_notifyliquid_valueForKey:@"glass_on" defaultValue:nil], NO);

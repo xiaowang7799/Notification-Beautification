@@ -215,24 +215,48 @@
 
         <dict>
             <key>cell</key><string>PSGroupCell</string>
-            <key>label</key><string>液态弹性动画</string>
+            <key>label</key><string>出现动画与触摸反馈</string>
+            <key>footerText</key><string>出现动画：果冻弹跳 / 除雾渐显（iOS 26 progressive defogging）/ 挤压拉伸（squeeze &amp; stretch 果冻物理）/ 凝胶膨胀。</string>
         </dict>
         <dict>
-            <key>cell</key><string>PSSwitchCell</string>
-            <key>label</key><string>通知出现时弹跳</string>
-            <key>key</key><string>elastic_on</string>
+            <key>cell</key><string>PSSegmentCell</string>
+            <key>label</key><string>出现动画</string>
+            <key>key</key><string>appear_mode</string>
             <key>defaults</key><string>com.axs.notifyliquid</string>
-            <key>default</key><false/>
+            <key>default</key><integer>1</integer>
+            <key>validValues</key>
+            <array>
+                <integer>0</integer>
+                <integer>1</integer>
+                <integer>2</integer>
+                <integer>3</integer>
+                <integer>4</integer>
+            </array>
+            <key>validTitles</key>
+            <array>
+                <string>关</string>
+                <string>果冻</string>
+                <string>除雾</string>
+                <string>挤压拉伸</string>
+                <string>凝胶</string>
+            </array>
         </dict>
         <dict>
             <key>cell</key><string>PSTitleValueCell</string>
             <key>cellClass</key><string>AxsNotifyLiquidSliderCell</string>
-            <key>label</key><string>弹性强度</string>
+            <key>label</key><string>动画强度</string>
             <key>key</key><string>elastic_intensity</string>
             <key>defaults</key><string>com.axs.notifyliquid</string>
             <key>default</key><real>1.0</real>
             <key>min</key><real>0.2</real>
             <key>max</key><real>2.0</real>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSSwitchCell</string>
+            <key>label</key><string>触摸发光（touch glow）</string>
+            <key>key</key><string>touch_glow_on</string>
+            <key>defaults</key><string>com.axs.notifyliquid</string>
+            <key>default</key><false/>
         </dict>
 
     </array>

@@ -13,9 +13,11 @@
 - (double)axs_notifyliquid_gradientHue2;
 - (double)axs_notifyliquid_gradientSpeed;
 - (double)axs_notifyliquid_gradientOpacity;
-// 液态弹性动画（通知出现时果冻弹跳）。
-- (BOOL)axs_notifyliquid_elasticOn;
-- (double)axs_notifyliquid_elasticIntensity;
+// 出现动画（liquid_glass_widgets 风格）：0=关 1=果冻弹跳 2=除雾渐显 3=挤压拉伸 4=凝胶膨胀。
+- (NSInteger)axs_notifyliquid_appearMode;
+- (double)axs_notifyliquid_appearIntensity;
+// 触摸发光（touch glow）：触摸通知时高光闪一下 + 微挤压。
+- (BOOL)axs_notifyliquid_touchGlowOn;
 // 液态玻璃质感（LiquidGlassKit 复刻）：材质 / 边缘高光 / 阴影 / 高光动画模式。
 // 材质：0=清透 1=磨砂 2=着色 3=暗色。
 - (BOOL)axs_notifyliquid_glassOn;

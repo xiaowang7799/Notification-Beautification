@@ -153,20 +153,58 @@
 
     [self.effects addObject:effect];
 
-    // 液态弹性出现动画（果冻弹跳）。
-    if ([config axs_notifyliquid_elasticOn]) {
-        double intensity = [config axs_notifyliquid_elasticIntensity];
-        double scale = [config axs_notifyliquid_notifyScale];
-        CAKeyframeAnimation *pop = [CAKeyframeAnimation animationWithKeyPath:@"transform.scale"];
-        pop.values = @[@(scale * (1.0 - 0.25 * intensity)),
-                       @(scale * (1.0 + 0.08 * intensity)),
-                       @(scale * (1.0 - 0.03 * intensity)),
-                       @(scale)];
-        pop.keyTimes = @[@0, @0.45, @0.75, @1.0];
-        pop.duration = 0.55;
-        pop.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseOut];
-        pop.removedOnCompletion = YES;
-        [view.layer addAnimation:pop forKey:@"axs_liquid_pop"];
+    // 出现动画（liquid_glass_widgets 风格五档）：果冻弹跳 / 除雾渐显 / 挤压拉伸 / 凝胶膨胀。
+    NSInteger appearMode = [config axs_notifyliquid_appearMode];
+    if (appearMode > 0) {
+        double intensity = [config axs_notifyliquid_appearIntensity];
+        double s = [config axs_notifyliquid_notifyScale];
+        CAAnimationGroup *group = [CAAnimationGroup animation];
+        group.removedOnCompletion = YES;
+        if (appearMode == 1) {
+            // 果冻弹跳（jelly pop）。
+            CAKeyframeAnimation *pop = [CAKeyframeAnimation animationWithKeyPath:@"transform.scale"];
+            pop.values = @[@(s * (1.0 - 0.25 * intensity)),
+                           @(s * (1.0 + 0.08 * intensity)),
+                           @(s * (1.0 - 0.03 * intensity)),
+                           @(s)];
+            pop.keyTimes = @[@0, @0.45, @0.75, @1.0];
+            group.animations = @[pop];
+            group.duration = 0.55;
+        } else if (appearMode == 2) {
+            // 除雾渐显（GlassMaterialize progressive defogging）：半透明雾感 → 清晰。
+            CABasicAnimation *fade = [CABasicAnimation animationWithKeyPath:@"opacity"];
+            fade.fromValue = @0.15;
+            fade.toValue = @1.0;
+            CABasicAnimation *settle = [CABasicAnimation animationWithKeyPath:@"transform.scale"];
+            settle.fromValue = @(s * 1.07);
+            settle.toValue = @(s);
+            group.animations = @[fade, settle];
+            group.duration = 0.65;
+        } else if (appearMode == 3) {
+            // 挤压拉伸（squeeze & stretch）：X/Y 反相形变，果冻手感。
+            CAKeyframeAnimation *sx = [CAKeyframeAnimation animationWithKeyPath:@"transform.scale.x"];
+            sx.values = @[@(s), @(s * (1.0 + 0.20 * intensity)),
+                          @(s * (1.0 - 0.12 * intensity)), @(s * (1.0 + 0.05 * intensity)), @(s)];
+            sx.keyTimes = @[@0, @0.25, @0.55, @0.8, @1.0];
+            CAKeyframeAnimation *sy = [CAKeyframeAnimation animationWithKeyPath:@"transform.scale.y"];
+            sy.values = @[@(s), @(s * (1.0 - 0.18 * intensity)),
+                          @(s * (1.0 + 0.12 * intensity)), @(s * (1.0 - 0.04 * intensity)), @(s)];
+            sy.keyTimes = @[@0, @0.25, @0.55, @0.8, @1.0];
+            group.animations = @[sx, sy];
+            group.duration = 0.6;
+        } else {
+            // 凝胶膨胀（gel swell）：从压缩胶囊膨胀回弹。
+            CAKeyframeAnimation *pop = [CAKeyframeAnimation animationWithKeyPath:@"transform.scale"];
+            pop.values = @[@(s * (1.0 - 0.30 * intensity)),
+                           @(s * (1.0 + 0.12 * intensity)),
+                           @(s * (1.0 - 0.04 * intensity)),
+                           @(s)];
+            pop.keyTimes = @[@0, @0.5, @0.78, @1.0];
+            group.animations = @[pop];
+            group.duration = 0.5;
+        }
+        group.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseOut];
+        [view.layer addAnimation:group forKey:@"axs_liquid_appear"];
     }
 
     [self axs_notifyliquid_refreshForView:view];
@@ -217,6 +255,31 @@
         // 通知缩放（transform，布局后重施即自愈——frame 由系统管，transform 归我们）。
         double s = [config axs_notifyliquid_notifyScale];
         v.layer.transform = CATransform3DMakeScale(s, s, 1.0);
+        return;
+    }
+}
+
+#pragma mark - 触摸发光（touch glow，liquid_glass_widgets: GlassButton）
+
+- (void)axs_notifyliquid_touchGlowForView:(UIView *)view {
+    AxsNotifyLiquidConfig *config = [AxsNotifyLiquidConfig axs_notifyliquid_shared];
+    if (![config axs_notifyliquid_isEnabled] || ![config axs_notifyliquid_touchGlowOn]) return;
+    for (AxsNotifyLiquidEffect *e in self.effects) {
+        if (e.view != view) continue;
+        // 高光脉冲：透明度瞬间拉满再落回。
+        float baseGlass = e.glass.opacity;
+        CAKeyframeAnimation *glow = [CAKeyframeAnimation animationWithKeyPath:@"opacity"];
+        glow.values = @[@(baseGlass), @1.0, @(baseGlass)];
+        glow.keyTimes = @[@0, @0.3, @1.0];
+        glow.duration = 0.45;
+        [e.glass addAnimation:glow forKey:@"axs_touch_glow"];
+        // 微挤压（果冻手感）。
+        double s = [config axs_notifyliquid_notifyScale];
+        CAKeyframeAnimation *squeeze = [CAKeyframeAnimation animationWithKeyPath:@"transform.scale"];
+        squeeze.values = @[@(s), @(s * 0.95), @(s * 1.02), @(s)];
+        squeeze.keyTimes = @[@0, @0.3, @0.7, @1.0];
+        squeeze.duration = 0.35;
+        [view.layer addAnimation:squeeze forKey:@"axs_touch_squeeze"];
         return;
     }
 }

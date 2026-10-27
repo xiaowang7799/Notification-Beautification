@@ -12,4 +12,6 @@
 - (void)axs_notifyliquid_detachView:(UIView *)view;
 // 系统重新布局后调用（刷新层帧 + 重施缩放，带自愈）。
 - (void)axs_notifyliquid_refreshForView:(UIView *)view;
+// 触摸发光（touch glow）：高光脉冲 + 微挤压。
+- (void)axs_notifyliquid_touchGlowForView:(UIView *)view;
 @end

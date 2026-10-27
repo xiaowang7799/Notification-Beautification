@@ -23,6 +23,12 @@
     [[AxsNotifyLiquidAnimator axs_notifyliquid_shared] axs_notifyliquid_refreshForView:self];
 }
 
+- (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    %orig;
+    // 触摸发光（touch glow）：高光脉冲 + 微挤压。
+    [[AxsNotifyLiquidAnimator axs_notifyliquid_shared] axs_notifyliquid_touchGlowForView:self];
+}
+
 %end
 
 // 长按展开态（LongLook）同套效果。
@@ -40,6 +46,11 @@
 - (void)layoutSubviews {
     %orig;
     [[AxsNotifyLiquidAnimator axs_notifyliquid_shared] axs_notifyliquid_refreshForView:self];
+}
+
+- (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    %orig;
+    [[AxsNotifyLiquidAnimator axs_notifyliquid_shared] axs_notifyliquid_touchGlowForView:self];
 }
 
 %end
