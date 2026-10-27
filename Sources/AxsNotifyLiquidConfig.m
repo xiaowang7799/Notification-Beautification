@@ -100,44 +100,6 @@ static BOOL axs_notifyliquid_bool(id value, BOOL def) {
 - (BOOL)axs_notifyliquid_touchGlowOn {
     return axs_notifyliquid_bool([self axs_notifyliquid_valueForKey:@"touch_glow_on" defaultValue:nil], NO);
 }
-- (BOOL)axs_notifyliquid_glassOn {
-    return axs_notifyliquid_bool([self axs_notifyliquid_valueForKey:@"glass_on" defaultValue:nil], NO);
-}
-- (double)axs_notifyliquid_glassIntensity {
-    return axs_notifyliquid_clamped([self axs_notifyliquid_valueForKey:@"glass_intensity" defaultValue:nil], 0.6, 0.1, 1.0);
-}
-- (NSInteger)axs_notifyliquid_glassMaterial {
-    double d = axs_notifyliquid_clamped([self axs_notifyliquid_valueForKey:@"glass_material" defaultValue:nil], 1.0, 0.0, 3.0);
-    return (NSInteger)d;
-}
-- (double)axs_notifyliquid_glassTintHue {
-    return axs_notifyliquid_clamped([self axs_notifyliquid_valueForKey:@"glass_tint_hue" defaultValue:nil], 0.6, 0.0, 1.0);
-}
-- (BOOL)axs_notifyliquid_edgeOn {
-    return axs_notifyliquid_bool([self axs_notifyliquid_valueForKey:@"edge_on" defaultValue:nil], NO);
-}
-- (double)axs_notifyliquid_edgeIntensity {
-    return axs_notifyliquid_clamped([self axs_notifyliquid_valueForKey:@"edge_intensity" defaultValue:nil], 0.6, 0.1, 1.0);
-}
-- (BOOL)axs_notifyliquid_edgeChroma {
-    return axs_notifyliquid_bool([self axs_notifyliquid_valueForKey:@"edge_chroma" defaultValue:nil], NO);
-}
-- (BOOL)axs_notifyliquid_innerGlowOn {
-    return axs_notifyliquid_bool([self axs_notifyliquid_valueForKey:@"inner_glow_on" defaultValue:nil], NO);
-}
-- (double)axs_notifyliquid_innerGlowIntensity {
-    return axs_notifyliquid_clamped([self axs_notifyliquid_valueForKey:@"inner_glow_intensity" defaultValue:nil], 0.5, 0.1, 1.0);
-}
-- (BOOL)axs_notifyliquid_shadowOn {
-    return axs_notifyliquid_bool([self axs_notifyliquid_valueForKey:@"shadow_on" defaultValue:nil], NO);
-}
-- (double)axs_notifyliquid_shadowIntensity {
-    return axs_notifyliquid_clamped([self axs_notifyliquid_valueForKey:@"shadow_intensity" defaultValue:nil], 0.5, 0.1, 1.0);
-}
-- (NSInteger)axs_notifyliquid_highlightMode {
-    double d = axs_notifyliquid_clamped([self axs_notifyliquid_valueForKey:@"highlight_mode" defaultValue:nil], 0.0, 0.0, 3.0);
-    return (NSInteger)d;
-}
 
 - (void)dealloc {
     CFNotificationCenterRemoveEveryObserver(CFNotificationCenterGetDarwinNotifyCenter(),
