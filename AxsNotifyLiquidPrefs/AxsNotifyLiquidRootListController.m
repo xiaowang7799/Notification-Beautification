@@ -124,4 +124,82 @@
     }
 }
 
+#pragma mark - 自定义预设（保存 / 应用 / 删除）
+
+static NSArray<NSString *> *axs_notifyliquid_presetKeys(void) {
+    return @[@"enabled", @"notify_scale",
+             @"gradient_on", @"gradient_hue1", @"gradient_hue2",
+             @"gradient_speed", @"gradient_opacity",
+             @"color_source", @"dark_dim",
+             @"burst_on", @"burst_intensity", @"dissolve_on",
+             @"appear_mode", @"elastic_intensity", @"touch_glow_on",
+             @"fish_on", @"fish_count", @"fish_size", @"fish_png",
+             @"bubble_size", @"bubble_opacity",
+             @"particle_on", @"particle_png", @"particle_density",
+             @"particle_size", @"particle_dir",
+             @"charge_fx", @"low_power_guard",
+             @"auto_schedule", @"schedule_day", @"schedule_night"];
+}
+
+- (void)axs_notifyliquid_savePreset:(id)sender {
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"保存预设"
+        message:@"给当前配置起个名字" preferredStyle:UIAlertControllerStyleAlert];
+    [alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
+        field.placeholder = @"例如：星空夜";
+    }];
+    [alert addAction:[UIAlertAction actionWithTitle:@"保存" style:UIAlertActionStyleDefault
+        handler:^(UIAlertAction *act) {
+        NSString *name = [alert.textFields.firstObject.text stringByTrimmingCharactersInSet:
+                          [NSCharacterSet whitespaceCharacterSet]];
+        if (name.length == 0) return;
+        NSDictionary *all = axs_notifyliquid_readPreferences();
+        NSMutableDictionary *settings = [NSMutableDictionary dictionary];
+        for (NSString *key in axs_notifyliquid_presetKeys()) {
+            id v = all[key];
+            if (v) settings[key] = v;
+        }
+        NSArray *existing = [all[@"custom_presets"] isKindOfClass:[NSArray class]] ? all[@"custom_presets"] : @[];
+        NSMutableArray *presets = [existing mutableCopy];
+        [presets addObject:@{@"name": name, @"settings": settings}];
+        NSError *error = nil;
+        axs_notifyliquid_writePreference(@"custom_presets", presets, &error);
+        [self reloadSpecifiers];
+    }]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
+- (void)axs_notifyliquid_managePresets:(id)sender {
+    NSDictionary *all = axs_notifyliquid_readPreferences();
+    NSArray<NSDictionary *> *presets = [all[@"custom_presets"] isKindOfClass:[NSArray class]] ? all[@"custom_presets"] : @[];
+    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"已存预设"
+        message:presets.count ? nil : @"还没有保存的预设" preferredStyle:UIAlertControllerStyleActionSheet];
+    for (NSDictionary *preset in presets) {
+        NSString *name = [preset objectForKey:@"name"] ?: @"未命名";
+        [sheet addAction:[UIAlertAction actionWithTitle:[@"应用：" stringByAppendingString:name]
+            style:UIAlertActionStyleDefault handler:^(UIAlertAction *act) {
+            NSDictionary *settings = [preset objectForKey:@"settings"];
+            if ([settings isKindOfClass:[NSDictionary class]]) {
+                NSError *error = nil;
+                for (NSString *key in axs_notifyliquid_presetKeys()) {
+                    id v = settings[key];
+                    if (v) axs_notifyliquid_writePreference(key, v, &error);
+                }
+                [self reloadSpecifiers];
+            }
+        }]];
+        [sheet addAction:[UIAlertAction actionWithTitle:[@"删除：" stringByAppendingString:name]
+            style:UIAlertActionStyleDestructive handler:^(UIAlertAction *act) {
+            NSMutableArray *next = [presets mutableCopy];
+            [next removeObject:preset];
+            NSError *error = nil;
+            axs_notifyliquid_writePreference(@"custom_presets", next, &error);
+            [self reloadSpecifiers];
+        }]];
+    }
+    [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    sheet.popoverPresentationController.sourceView = self.view;
+    [self presentViewController:sheet animated:YES completion:nil];
+}
+
 @end

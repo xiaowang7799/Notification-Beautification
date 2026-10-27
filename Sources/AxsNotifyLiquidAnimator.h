@@ -16,4 +16,7 @@
 - (void)axs_notifyliquid_touchGlowForView:(UIView *)view;
 // 消失消散：划走/清除时液态溶解（willMoveToWindow:nil 时调用）。
 - (void)axs_notifyliquid_dissolveForView:(UIView *)view;
+// 滑动拖尾：拖动时渐变跟手 / 松手回位。
+- (void)axs_notifyliquid_dragGradientForView:(UIView *)view translationY:(CGFloat)dy;
+- (void)axs_notifyliquid_endDragForView:(UIView *)view;
 @end

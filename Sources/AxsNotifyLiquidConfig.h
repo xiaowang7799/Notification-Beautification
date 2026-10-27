@@ -22,6 +22,21 @@
 - (BOOL)axs_notifyliquid_fishOn;
 - (NSInteger)axs_notifyliquid_fishCount;
 - (double)axs_notifyliquid_fishSize;
+// 自定义鱼图片（多张 ; 分隔，留空用手绘小鱼）。
+- (NSString *)axs_notifyliquid_fishPng;
+// 泡泡样式：大小倍数、透明度。
+- (double)axs_notifyliquid_bubbleSize;
+- (double)axs_notifyliquid_bubbleOpacity;
+// 粒子方向：0=下落 1=上飘 2=横飘。
+- (NSInteger)axs_notifyliquid_particleDir;
+// 充电特效（⚡金色火花）。
+- (BOOL)axs_notifyliquid_chargeFx;
+// 低电量保护（自动降载）。
+- (BOOL)axs_notifyliquid_lowPowerGuard;
+// 时段自动切换（白天/夜间预设名）。
+- (BOOL)axs_notifyliquid_autoSchedule;
+- (NSString *)axs_notifyliquid_scheduleDayName;
+- (NSString *)axs_notifyliquid_scheduleNightName;
 // 配色来源：0=手动双色 1=跟随应用图标 2=跟随壁纸。
 - (NSInteger)axs_notifyliquid_colorSource;
 // 深色模式自动压暗。

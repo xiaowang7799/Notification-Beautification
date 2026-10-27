@@ -60,6 +60,36 @@
             <key>min</key><real>0.5</real>
             <key>max</key><real>2.0</real>
         </dict>
+        <dict>
+            <key>cell</key><string>PSTitleValueCell</string>
+            <key>cellClass</key><string>AxsNotifyLiquidTextFieldCell</string>
+            <key>label</key><string>📂 鱼图片(点标签跳Filza)</string>
+            <key>key</key><string>fish_png</string>
+            <key>defaults</key><string>com.axs.notifyliquid</string>
+            <key>default</key><string></string>
+            <key>placeholder</key><string>留空=手绘小鱼；多张用 ; 分隔</string>
+            <key>filza</key><true/>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSTitleValueCell</string>
+            <key>cellClass</key><string>AxsNotifyLiquidSliderCell</string>
+            <key>label</key><string>泡泡大小</string>
+            <key>key</key><string>bubble_size</string>
+            <key>defaults</key><string>com.axs.notifyliquid</string>
+            <key>default</key><real>1.0</real>
+            <key>min</key><real>0.5</real>
+            <key>max</key><real>2.0</real>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSTitleValueCell</string>
+            <key>cellClass</key><string>AxsNotifyLiquidSliderCell</string>
+            <key>label</key><string>泡泡透明度</string>
+            <key>key</key><string>bubble_opacity</string>
+            <key>defaults</key><string>com.axs.notifyliquid</string>
+            <key>default</key><real>0.9</real>
+            <key>min</key><real>0.1</real>
+            <key>max</key><real>1.0</real>
+        </dict>
 
         <dict>
             <key>cell</key><string>PSGroupCell</string>
@@ -192,6 +222,86 @@
             <key>default</key><real>1.0</real>
             <key>min</key><real>0.5</real>
             <key>max</key><real>2.0</real>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSSegmentCell</string>
+            <key>label</key><string>粒子方向</string>
+            <key>key</key><string>particle_dir</string>
+            <key>defaults</key><string>com.axs.notifyliquid</string>
+            <key>default</key><integer>0</integer>
+            <key>validValues</key>
+            <array>
+                <integer>0</integer>
+                <integer>1</integer>
+                <integer>2</integer>
+            </array>
+            <key>validTitles</key>
+            <array>
+                <string>下落</string>
+                <string>上飘</string>
+                <string>横飘</string>
+            </array>
+        </dict>
+
+        <dict>
+            <key>cell</key><string>PSGroupCell</string>
+            <key>label</key><string>智能与情境</string>
+            <key>footerText</key><string>充电特效=充电时通知冒 ⚡ 金色火花；时段切换=白天(7-19点)/夜间自动套用下方预设名。</string>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSSwitchCell</string>
+            <key>label</key><string>充电特效（⚡金色火花）</string>
+            <key>key</key><string>charge_fx</string>
+            <key>defaults</key><string>com.axs.notifyliquid</string>
+            <key>default</key><false/>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSSwitchCell</string>
+            <key>label</key><string>低电量自动降载</string>
+            <key>key</key><string>low_power_guard</string>
+            <key>defaults</key><string>com.axs.notifyliquid</string>
+            <key>default</key><true/>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSSwitchCell</string>
+            <key>label</key><string>按时段自动换预设</string>
+            <key>key</key><string>auto_schedule</string>
+            <key>defaults</key><string>com.axs.notifyliquid</string>
+            <key>default</key><false/>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSTitleValueCell</string>
+            <key>cellClass</key><string>AxsNotifyLiquidTextFieldCell</string>
+            <key>label</key><string>白天预设名</string>
+            <key>key</key><string>schedule_day</string>
+            <key>defaults</key><string>com.axs.notifyliquid</string>
+            <key>default</key><string></string>
+            <key>placeholder</key><string>输入已保存的预设名</string>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSTitleValueCell</string>
+            <key>cellClass</key><string>AxsNotifyLiquidTextFieldCell</string>
+            <key>label</key><string>夜间预设名</string>
+            <key>key</key><string>schedule_night</string>
+            <key>defaults</key><string>com.axs.notifyliquid</string>
+            <key>default</key><string></string>
+            <key>placeholder</key><string>输入已保存的预设名</string>
+        </dict>
+
+        <dict>
+            <key>cell</key><string>PSGroupCell</string>
+            <key>label</key><string>自定义预设</string>
+            <key>footerText</key><string>保存当前整套配置；应用/删除已存预设。时段切换引用的预设名在这里保存。</string>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSButtonCell</string>
+            <key>label</key><string>保存当前为预设</string>
+            <key>action</key><string>axs_notifyliquid_savePreset:</string>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSButtonCell</string>
+            <key>label</key><string>应用 / 删除已存预设</string>
+            <key>action</key><string>axs_notifyliquid_managePresets:</string>
         </dict>
 
         <dict>

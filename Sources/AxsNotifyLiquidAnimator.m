@@ -15,6 +15,7 @@ static const void *kAxsLiquidSeenKey = &kAxsLiquidSeenKey;
 @property (nonatomic, strong) NSMutableArray<CALayer *> *fishLayers;  // 鱼缸游鱼
 @property (nonatomic, strong) NSMutableArray<NSNumber *> *fishNextBubble;  // 每条鱼的吐泡倒计时
 @property (nonatomic, assign) double fishSeed;   // 每条通知随机相位（鱼游互不同步）
+@property (nonatomic, assign) double chargeNext; // 充电火花倒计时
 @property (nonatomic, strong) CAEmitterLayer *burst;       // 到达粒子爆发
 @property (nonatomic, strong) CAEmitterLayer *season;      // 季节粒子
 @property (nonatomic, strong) UIColor *iconColor;          // 应用图标取色（缓存）
@@ -229,6 +230,8 @@ static UIImageView *axs_notifyliquid_findIconView(UIView *view, int depth) {
     self = [super init];
     if (self) {
         _effects = [NSMutableArray array];
+        // 充电特效需要电池状态。
+        [UIDevice currentDevice].batteryMonitoringEnabled = YES;
     }
     return self;
 }
@@ -266,10 +269,21 @@ static UIImageView *axs_notifyliquid_findIconView(UIView *view, int depth) {
     [view.layer addSublayer:gradient];
     effect.gradient = gradient;
 
-    // 鱼缸游鱼：手绘小鱼 5 色（金橙/青蓝/粉/紫/绿），预建 8 条上限，tick 按 fish_count 显示前 N 条。
+    // 鱼缸游鱼：自定义图片优先（多张 ; 分隔轮流），否则手绘 5 色小鱼。
     effect.fishLayers = [NSMutableArray array];
     effect.fishNextBubble = [NSMutableArray array];
     effect.fishSeed = (double)arc4random_uniform(10000) / 100.0;   // 随机相位：各通知鱼游互不同步
+    effect.chargeNext = 1.0;
+    // 加载自定义鱼图（最多 6 张）。
+    NSMutableArray<UIImage *> *customFish = [NSMutableArray array];
+    for (NSString *raw in [[config axs_notifyliquid_fishPng] componentsSeparatedByString:@";"]) {
+        NSString *p = [raw stringByTrimmingCharactersInSet:
+                       [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        if (p.length == 0) continue;
+        UIImage *img = [UIImage imageWithContentsOfFile:p];
+        if (img) [customFish addObject:img];
+        if (customFish.count >= 6) break;
+    }
     NSArray<UIColor *> *palette = @[
         [UIColor colorWithRed:1.00 green:0.62 blue:0.21 alpha:1],   // 金橙
         [UIColor colorWithRed:0.25 green:0.72 blue:0.85 alpha:1],   // 青蓝
@@ -283,8 +297,10 @@ static UIImageView *axs_notifyliquid_findIconView(UIView *view, int depth) {
         fish.zPosition = 6;   // 背景之上、渐变之下
         [view.layer addSublayer:fish];
         [effect.fishLayers addObject:fish];
-        // sprite 高分辨率渲染（矢量小鱼），实际显示大小由 bounds + fish_size 控制。
-        UIImage *img = axs_notifyliquid_fishImage(palette[(NSUInteger)i % palette.count], 64.0);
+        // 自定义图优先，否则手绘小鱼；sprite 高分辨率渲染，显示大小由 bounds + fish_size 控制。
+        UIImage *img = customFish.count > 0
+            ? customFish[(NSUInteger)i % customFish.count]
+            : axs_notifyliquid_fishImage(palette[(NSUInteger)i % palette.count], 64.0);
         fish.contents = (__bridge id)img.CGImage;
         [effect.fishNextBubble addObject:@(1.0 + (i % 5) * 0.6 + ((double)arc4random() / UINT32_MAX) * 1.5)];
     }
@@ -494,6 +510,40 @@ static UIImageView *axs_notifyliquid_findIconView(UIView *view, int depth) {
     }
 }
 
+#pragma mark - 滑动拖尾（拖动通知时渐变跟手，松手回位）
+
+- (void)axs_notifyliquid_dragGradientForView:(UIView *)view translationY:(CGFloat)dy {
+    for (AxsNotifyLiquidEffect *e in self.effects) {
+        if (e.view != view) continue;
+        CGFloat clamped = (CGFloat)fmax(-60.0, fmin(60.0, dy * 0.35));
+        [CATransaction begin];
+        [CATransaction setDisableActions:YES];
+        e.gradient.position = CGPointMake(CGRectGetMidX(view.bounds),
+                                          CGRectGetMidY(view.bounds) + clamped);
+        [CATransaction commit];
+        return;
+    }
+}
+
+- (void)axs_notifyliquid_endDragForView:(UIView *)view {
+    for (AxsNotifyLiquidEffect *e in self.effects) {
+        if (e.view != view) continue;
+        // 弹回中心（带缓动）。
+        CABasicAnimation *back = [CABasicAnimation animationWithKeyPath:@"position"];
+        back.fromValue = [NSValue valueWithCGPoint:e.gradient.position];
+        back.toValue = [NSValue valueWithCGPoint:
+            CGPointMake(CGRectGetMidX(view.bounds), CGRectGetMidY(view.bounds))];
+        back.duration = 0.35;
+        back.timingFunction = [CAMediaTimingFunction functionWithName:kCAMediaTimingFunctionEaseOut];
+        [e.gradient addAnimation:back forKey:@"axs_drag_back"];
+        [CATransaction begin];
+        [CATransaction setDisableActions:YES];
+        e.gradient.position = CGPointMake(CGRectGetMidX(view.bounds), CGRectGetMidY(view.bounds));
+        [CATransaction commit];
+        return;
+    }
+}
+
 #pragma mark - 消失消散（划走/清除时液态溶解）
 
 - (void)axs_notifyliquid_dissolveForView:(UIView *)view {
@@ -550,6 +600,9 @@ static UIImageView *axs_notifyliquid_findIconView(UIView *view, int depth) {
     [CATransaction setDisableActions:YES];
 
     BOOL gradientOn = [config axs_notifyliquid_gradientOn];
+    // 低电量保护：降粒子密度、降吐泡频率、关充电特效。
+    BOOL lowPower = [config axs_notifyliquid_lowPowerGuard]
+                    && [NSProcessInfo processInfo].isLowPowerModeEnabled;
     double gSpeed = [config axs_notifyliquid_gradientSpeed];
     double gOpacity = [config axs_notifyliquid_gradientOpacity];
     double hue1 = [config axs_notifyliquid_gradientHue1];
@@ -636,14 +689,16 @@ static UIImageView *axs_notifyliquid_findIconView(UIView *view, int depth) {
             if (fi < (NSInteger)e.fishNextBubble.count) {
                 double remain = [e.fishNextBubble[(NSUInteger)fi] doubleValue] - (link.duration > 0 ? link.duration : 1.0 / 30.0);
                 if (remain <= 0) {
-                    remain = 1.4 + ((double)arc4random() / UINT32_MAX) * 1.8;
-                    CGFloat bs = (CGFloat)(3.5 + fishSize * 2.5);
+                    remain = (1.4 + ((double)arc4random() / UINT32_MAX) * 1.8) * (lowPower ? 2.0 : 1.0);
+                    double bubbleSize = [config axs_notifyliquid_bubbleSize];
+                    double bubbleOpacity = [config axs_notifyliquid_bubbleOpacity];
+                    CGFloat bs = (CGFloat)((3.5 + fishSize * 2.5) * bubbleSize);
                     CALayer *bub = [CALayer layer];
                     bub.bounds = CGRectMake(0, 0, bs, bs);
                     bub.cornerRadius = bs / 2.0;
                     bub.borderWidth = 1.1;
-                    bub.borderColor = [UIColor colorWithWhite:1 alpha:0.7].CGColor;
-                    bub.backgroundColor = [UIColor colorWithWhite:1 alpha:0.16].CGColor;
+                    bub.borderColor = [UIColor colorWithWhite:1 alpha:(CGFloat)(0.8 * bubbleOpacity)].CGColor;
+                    bub.backgroundColor = [UIColor colorWithWhite:1 alpha:(CGFloat)(0.18 * bubbleOpacity)].CGColor;
                     CGFloat dir = cos(phase) < 0 ? -1 : 1;
                     bub.position = CGPointMake(fish.position.x + dir * displaySize * 0.42,
                                                fish.position.y - displaySize * 0.12);
@@ -666,6 +721,48 @@ static UIImageView *axs_notifyliquid_findIconView(UIView *view, int depth) {
                     });
                 }
                 e.fishNextBubble[(NSUInteger)fi] = @(remain);
+            }
+        }
+
+        // 充电特效：⚡ 金色火花从底部上飘（充电中且未低电量时）。
+        if ([config axs_notifyliquid_chargeFx] && !lowPower) {
+            UIDevice *dev = [UIDevice currentDevice];
+            BOOL charging = (dev.batteryState == UIDeviceBatteryStateCharging
+                             || dev.batteryState == UIDeviceBatteryStateFull);
+            if (charging) {
+                e.chargeNext -= (link.duration > 0 ? link.duration : 1.0 / 30.0);
+                if (e.chargeNext <= 0) {
+                    e.chargeNext = 1.1 + ((double)arc4random() / UINT32_MAX) * 1.2;
+                    static UIImage *sparkSprite = nil;
+                    static dispatch_once_t onceToken;
+                    dispatch_once(&onceToken, ^{
+                        sparkSprite = axs_notifyliquid_emojiImage(@"⚡", 24.0);
+                    });
+                    CGFloat ss = 14.0;
+                    CALayer *spark = [CALayer layer];
+                    spark.bounds = CGRectMake(0, 0, ss, ss);
+                    spark.contents = (__bridge id)sparkSprite.CGImage;
+                    spark.position = CGPointMake((CGFloat)(((double)arc4random() / UINT32_MAX)
+                                                          * v.bounds.size.width),
+                                                 CGRectGetMaxY(v.bounds) - 4.0);
+                    spark.zPosition = 7;
+                    [v.layer addSublayer:spark];
+                    CABasicAnimation *rise = [CABasicAnimation animationWithKeyPath:@"position.y"];
+                    rise.fromValue = @(spark.position.y);
+                    rise.toValue = @(spark.position.y - 70);
+                    CABasicAnimation *fade = [CABasicAnimation animationWithKeyPath:@"opacity"];
+                    fade.fromValue = @0.95;
+                    fade.toValue = @0.0;
+                    CAAnimationGroup *g = [CAAnimationGroup animation];
+                    g.animations = @[rise, fade];
+                    g.duration = 1.9;
+                    g.removedOnCompletion = YES;
+                    [spark addAnimation:g forKey:@"axs_charge_spark"];
+                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)),
+                                   dispatch_get_main_queue(), ^{
+                        [spark removeFromSuperlayer];
+                    });
+                }
             }
         }
 
@@ -720,15 +817,21 @@ static UIImageView *axs_notifyliquid_findIconView(UIView *view, int depth) {
                 }
                 e.season.emitterCells = cells;
             }
-            // 数量（密度）/ 大小实时同步。
+            // 数量（密度）/ 大小 / 方向 实时同步。
             double pSize = [config axs_notifyliquid_particleSize];
             double density = [config axs_notifyliquid_particleDensity];
+            NSInteger pDir = [config axs_notifyliquid_particleDir];
             NSArray<CAEmitterCell *> *cells = e.season.emitterCells;
-            float perRate = (float)(3.5 * density / (double)MAX((NSUInteger)1, cells.count));
+            float perRate = (float)(3.5 * density * (lowPower ? 0.4 : 1.0)
+                                    / (double)MAX((NSUInteger)1, cells.count));
+            double pLongitude = (pDir == 1) ? -M_PI_2 : ((pDir == 2) ? 0.0 : M_PI_2);  // 上飘/横飘/下落
+            float pVelocity = (pDir == 2) ? 26.0f : 32.0f;
             for (CAEmitterCell *pc in cells) {
                 pc.birthRate = perRate;
                 pc.scale = (float)(0.5 * pSize);
                 pc.scaleRange = (float)(0.2 * pSize);
+                pc.emissionLongitude = pLongitude;
+                pc.velocity = pVelocity;
             }
         } else if (e.season.opacity != 0) {
             e.season.opacity = 0;

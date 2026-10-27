@@ -110,6 +110,37 @@ static BOOL axs_notifyliquid_bool(id value, BOOL def) {
 - (double)axs_notifyliquid_fishSize {
     return axs_notifyliquid_clamped([self axs_notifyliquid_valueForKey:@"fish_size" defaultValue:nil], 1.0, 0.5, 2.0);
 }
+- (NSString *)axs_notifyliquid_fishPng {
+    id v = [self axs_notifyliquid_valueForKey:@"fish_png" defaultValue:nil];
+    return [v isKindOfClass:[NSString class]] ? v : @"";
+}
+- (double)axs_notifyliquid_bubbleSize {
+    return axs_notifyliquid_clamped([self axs_notifyliquid_valueForKey:@"bubble_size" defaultValue:nil], 1.0, 0.5, 2.0);
+}
+- (double)axs_notifyliquid_bubbleOpacity {
+    return axs_notifyliquid_clamped([self axs_notifyliquid_valueForKey:@"bubble_opacity" defaultValue:nil], 0.9, 0.1, 1.0);
+}
+- (NSInteger)axs_notifyliquid_particleDir {
+    double d = axs_notifyliquid_clamped([self axs_notifyliquid_valueForKey:@"particle_dir" defaultValue:nil], 0.0, 0.0, 2.0);
+    return (NSInteger)d;
+}
+- (BOOL)axs_notifyliquid_chargeFx {
+    return axs_notifyliquid_bool([self axs_notifyliquid_valueForKey:@"charge_fx" defaultValue:nil], NO);
+}
+- (BOOL)axs_notifyliquid_lowPowerGuard {
+    return axs_notifyliquid_bool([self axs_notifyliquid_valueForKey:@"low_power_guard" defaultValue:nil], YES);
+}
+- (BOOL)axs_notifyliquid_autoSchedule {
+    return axs_notifyliquid_bool([self axs_notifyliquid_valueForKey:@"auto_schedule" defaultValue:nil], NO);
+}
+- (NSString *)axs_notifyliquid_scheduleDayName {
+    id v = [self axs_notifyliquid_valueForKey:@"schedule_day" defaultValue:nil];
+    return [v isKindOfClass:[NSString class]] ? v : @"";
+}
+- (NSString *)axs_notifyliquid_scheduleNightName {
+    id v = [self axs_notifyliquid_valueForKey:@"schedule_night" defaultValue:nil];
+    return [v isKindOfClass:[NSString class]] ? v : @"";
+}
 - (NSInteger)axs_notifyliquid_colorSource {
     double d = axs_notifyliquid_clamped([self axs_notifyliquid_valueForKey:@"color_source" defaultValue:nil], 0.0, 0.0, 2.0);
     return (NSInteger)d;
