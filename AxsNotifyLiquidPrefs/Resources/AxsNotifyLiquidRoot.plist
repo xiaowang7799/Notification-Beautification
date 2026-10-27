@@ -82,22 +82,109 @@
 
         <dict>
             <key>cell</key><string>PSGroupCell</string>
-            <key>label</key><string>液态玻璃质感</string>
+            <key>label</key><string>液态玻璃质感（LiquidGlassKit 风格）</string>
+            <key>footerText</key><string>材质：清透/磨砂/着色/暗色；高光动画：shimmer 流光扫过 / pulse 脉冲 / breathe 呼吸。</string>
         </dict>
         <dict>
             <key>cell</key><string>PSSwitchCell</string>
-            <key>label</key><string>启用玻璃高光</string>
+            <key>label</key><string>启用玻璃质感</string>
             <key>key</key><string>glass_on</string>
+            <key>defaults</key><string>com.axs.notifyliquid</string>
+            <key>default</key><false/>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSSegmentCell</string>
+            <key>label</key><string>玻璃材质</string>
+            <key>key</key><string>glass_material</string>
+            <key>defaults</key><string>com.axs.notifyliquid</string>
+            <key>default</key><integer>1</integer>
+            <key>validValues</key>
+            <array>
+                <integer>0</integer>
+                <integer>1</integer>
+                <integer>2</integer>
+                <integer>3</integer>
+            </array>
+            <key>validTitles</key>
+            <array>
+                <string>清透</string>
+                <string>磨砂</string>
+                <string>着色</string>
+                <string>暗色</string>
+            </array>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSTitleValueCell</string>
+            <key>cellClass</key><string>AxsNotifyLiquidSliderCell</string>
+            <key>label</key><string>着色色相</string>
+            <key>key</key><string>glass_tint_hue</string>
+            <key>defaults</key><string>com.axs.notifyliquid</string>
+            <key>default</key><real>0.6</real>
+            <key>min</key><real>0.0</real>
+            <key>max</key><real>1.0</real>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSSegmentCell</string>
+            <key>label</key><string>高光动画</string>
+            <key>key</key><string>highlight_mode</string>
+            <key>defaults</key><string>com.axs.notifyliquid</string>
+            <key>default</key><integer>1</integer>
+            <key>validValues</key>
+            <array>
+                <integer>0</integer>
+                <integer>1</integer>
+                <integer>2</integer>
+                <integer>3</integer>
+            </array>
+            <key>validTitles</key>
+            <array>
+                <string>关</string>
+                <string>shimmer</string>
+                <string>pulse</string>
+                <string>breathe</string>
+            </array>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSTitleValueCell</string>
+            <key>cellClass</key><string>AxsNotifyLiquidSliderCell</string>
+            <key>label</key><string>玻璃强度</string>
+            <key>key</key><string>glass_intensity</string>
+            <key>defaults</key><string>com.axs.notifyliquid</string>
+            <key>default</key><real>0.6</real>
+            <key>min</key><real>0.1</real>
+            <key>max</key><real>1.0</real>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSSwitchCell</string>
+            <key>label</key><string>边缘高光</string>
+            <key>key</key><string>edge_on</string>
             <key>defaults</key><string>com.axs.notifyliquid</string>
             <key>default</key><false/>
         </dict>
         <dict>
             <key>cell</key><string>PSTitleValueCell</string>
             <key>cellClass</key><string>AxsNotifyLiquidSliderCell</string>
-            <key>label</key><string>高光强度</string>
-            <key>key</key><string>glass_intensity</string>
+            <key>label</key><string>边缘强度</string>
+            <key>key</key><string>edge_intensity</string>
             <key>defaults</key><string>com.axs.notifyliquid</string>
             <key>default</key><real>0.6</real>
+            <key>min</key><real>0.1</real>
+            <key>max</key><real>1.0</real>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSSwitchCell</string>
+            <key>label</key><string>阴影</string>
+            <key>key</key><string>shadow_on</string>
+            <key>defaults</key><string>com.axs.notifyliquid</string>
+            <key>default</key><false/>
+        </dict>
+        <dict>
+            <key>cell</key><string>PSTitleValueCell</string>
+            <key>cellClass</key><string>AxsNotifyLiquidSliderCell</string>
+            <key>label</key><string>阴影强度</string>
+            <key>key</key><string>shadow_intensity</string>
+            <key>defaults</key><string>com.axs.notifyliquid</string>
+            <key>default</key><real>0.5</real>
             <key>min</key><real>0.1</real>
             <key>max</key><real>1.0</real>
         </dict>

@@ -16,9 +16,18 @@
 // 液态弹性动画（通知出现时果冻弹跳）。
 - (BOOL)axs_notifyliquid_elasticOn;
 - (double)axs_notifyliquid_elasticIntensity;
-// 液态玻璃质感（流动高光）。
+// 液态玻璃质感（LiquidGlassKit 复刻）：材质 / 边缘高光 / 阴影 / 高光动画模式。
+// 材质：0=清透 1=磨砂 2=着色 3=暗色。
 - (BOOL)axs_notifyliquid_glassOn;
 - (double)axs_notifyliquid_glassIntensity;
+- (NSInteger)axs_notifyliquid_glassMaterial;
+- (double)axs_notifyliquid_glassTintHue;
+- (BOOL)axs_notifyliquid_edgeOn;
+- (double)axs_notifyliquid_edgeIntensity;
+- (BOOL)axs_notifyliquid_shadowOn;
+- (double)axs_notifyliquid_shadowIntensity;
+// 高光动画：0=关 1=shimmer 流光扫过 2=pulse 脉冲 3=breathe 呼吸。
+- (NSInteger)axs_notifyliquid_highlightMode;
 // Generic accessors.
 - (id)axs_notifyliquid_valueForKey:(NSString *)key defaultValue:(id)defaultValue;
 - (void)axs_notifyliquid_reload;

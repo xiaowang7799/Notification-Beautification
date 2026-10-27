@@ -8,7 +8,9 @@
 @interface AxsNotifyLiquidEffect : NSObject
 @property (nonatomic, weak) UIView *view;
 @property (nonatomic, strong) CAGradientLayer *gradient;   // 流动渐变背景
-@property (nonatomic, strong) CAGradientLayer *glass;      // 流动高光
+@property (nonatomic, strong) CAGradientLayer *glass;      // 流动高光（shimmer/pulse/breathe）
+@property (nonatomic, strong) CAGradientLayer *tint;       // 材质着色（清透/磨砂/着色/暗色）
+@property (nonatomic, strong) CAShapeLayer *edge;          // 边缘高光
 @end
 @implementation AxsNotifyLiquidEffect
 @end
@@ -86,6 +88,25 @@
     [view.layer addSublayer:glass];
     effect.glass = glass;
 
+    // 材质着色层（LiquidGlassKit 材质：清透/磨砂/着色/暗色，整层纯色叠加）。
+    CAGradientLayer *tint = [CAGradientLayer layer];
+    tint.frame = view.bounds;
+    tint.cornerRadius = radius;
+    tint.opacity = 0;
+    tint.zPosition = 9;
+    [view.layer addSublayer:tint];
+    effect.tint = tint;
+
+    // 边缘高光（一圈亮边，LiquidGlassKit 的 edge highlight）。
+    CAShapeLayer *edge = [CAShapeLayer layer];
+    edge.frame = view.bounds;
+    edge.fillColor = [UIColor clearColor].CGColor;
+    edge.lineWidth = 1.5;
+    edge.opacity = 0;
+    edge.zPosition = 12;
+    [view.layer addSublayer:edge];
+    effect.edge = edge;
+
     [self.effects addObject:effect];
 
     // 液态弹性出现动画（果冻弹跳）。
@@ -114,6 +135,8 @@
         if (e.view == view || e.view == nil) {
             [e.gradient removeFromSuperlayer];
             [e.glass removeFromSuperlayer];
+            [e.tint removeFromSuperlayer];
+            [e.edge removeFromSuperlayer];
             [self.effects removeObjectAtIndex:(NSUInteger)i];
         }
     }
@@ -132,6 +155,10 @@
         e.gradient.cornerRadius = radius;
         e.glass.frame = v.bounds;
         e.glass.cornerRadius = radius;
+        e.tint.frame = v.bounds;
+        e.tint.cornerRadius = radius;
+        e.edge.frame = v.bounds;
+        e.edge.path = [UIBezierPath bezierPathWithRoundedRect:v.bounds cornerRadius:radius].CGPath;
         // 通知缩放（transform，布局后重施即自愈——frame 由系统管，transform 归我们）。
         double s = [config axs_notifyliquid_notifyScale];
         v.layer.transform = CATransform3DMakeScale(s, s, 1.0);
@@ -180,6 +207,8 @@
         if (!v) {
             [e.gradient removeFromSuperlayer];
             [e.glass removeFromSuperlayer];
+            [e.tint removeFromSuperlayer];
+            [e.edge removeFromSuperlayer];
             [self.effects removeObjectAtIndex:(NSUInteger)i];
             continue;
         }
@@ -200,16 +229,71 @@
             e.gradient.opacity = 0;
         }
 
-        // 液态玻璃高光：光带位置缓慢往复（locations 必须钳制在 [0,1]，越界 CA 不渲染）。
+        // ── 液态玻璃（LiquidGlassKit 复刻）：材质 + 高光动画 + 边缘 + 阴影 ──
         if (glassOn) {
-            e.glass.opacity = (float)(0.8 * glassIntensity);
-            double pos = (sin(t * 0.5) + 1.0) / 2.0;   // 0..1
-            double w = 0.25;
-            double g0 = fmax(0.0, fmin(1.0, pos - w));
-            double g2 = fmax(0.0, fmin(1.0, pos + w));
-            e.glass.locations = @[@(g0), @(pos), @(g2)];
-        } else if (e.glass.opacity != 0) {
-            e.glass.opacity = 0;
+            // 材质着色：清透(无) / 磨砂(白) / 着色(色相) / 暗色(黑)。
+            NSInteger material = [config axs_notifyliquid_glassMaterial];
+            double tintHue = [config axs_notifyliquid_glassTintHue];
+            UIColor *tintColor = [UIColor clearColor];
+            float tintAlpha = 0;
+            switch (material) {
+                case 1: tintColor = [UIColor whiteColor]; tintAlpha = (float)(0.12 * glassIntensity); break;
+                case 2: tintColor = [UIColor colorWithHue:(CGFloat)tintHue saturation:0.6 brightness:1 alpha:1];
+                        tintAlpha = (float)(0.22 * glassIntensity); break;
+                case 3: tintColor = [UIColor blackColor]; tintAlpha = (float)(0.30 * glassIntensity); break;
+                default: break;
+            }
+            e.tint.colors = @[(id)tintColor.CGColor, (id)tintColor.CGColor];
+            e.tint.opacity = tintAlpha;
+
+            // 高光动画三模式（LiquidGlassKit: shimmer / pulse / breathe）。
+            NSInteger mode = [config axs_notifyliquid_highlightMode];
+            if (mode == 1) {
+                // shimmer：斜向光带缓慢扫过。
+                e.glass.opacity = (float)(0.8 * glassIntensity);
+                double pos = (sin(t * 0.5) + 1.0) / 2.0;
+                double w = 0.25;
+                double g0 = fmax(0.0, fmin(1.0, pos - w));
+                double g2 = fmax(0.0, fmin(1.0, pos + w));
+                e.glass.locations = @[@(g0), @(pos), @(g2)];
+            } else if (mode == 2) {
+                // pulse：亮度按节奏脉冲（1.5 秒周期）。
+                e.glass.locations = @[@0, @0.5, @1];
+                double pulse = (sin(t * 2.0 * M_PI / 1.5) + 1.0) / 2.0;
+                e.glass.opacity = (float)((0.15 + 0.55 * pulse) * glassIntensity);
+            } else if (mode == 3) {
+                // breathe：高光缓慢呼吸（4 秒周期）。
+                e.glass.locations = @[@0, @0.5, @1];
+                double breathe = (sin(t * 2.0 * M_PI / 4.0) + 1.0) / 2.0;
+                e.glass.opacity = (float)((0.10 + 0.50 * breathe) * glassIntensity);
+            } else if (e.glass.opacity != 0) {
+                e.glass.opacity = 0;
+            }
+
+            // 边缘高光（一圈亮边，随高光模式轻微明暗呼吸）。
+            if ([config axs_notifyliquid_edgeOn]) {
+                double ei = [config axs_notifyliquid_edgeIntensity];
+                e.edge.opacity = 1.0f;
+                e.edge.strokeColor = [UIColor colorWithWhite:1 alpha:(CGFloat)(0.35 + 0.35 * ei)].CGColor;
+            } else if (e.edge.opacity != 0) {
+                e.edge.opacity = 0;
+            }
+
+            // 阴影（LiquidGlassKit 的 shadow）。
+            if ([config axs_notifyliquid_shadowOn]) {
+                double si = [config axs_notifyliquid_shadowIntensity];
+                v.layer.shadowColor = [UIColor blackColor].CGColor;
+                v.layer.shadowRadius = (CGFloat)(4.0 + 10.0 * si);
+                v.layer.shadowOpacity = (float)(0.45 * si);
+                v.layer.shadowOffset = CGSizeMake(0, 6);
+            } else if (v.layer.shadowOpacity != 0) {
+                v.layer.shadowOpacity = 0;
+            }
+        } else {
+            if (e.glass.opacity != 0) e.glass.opacity = 0;
+            if (e.tint.opacity != 0) e.tint.opacity = 0;
+            if (e.edge.opacity != 0) e.edge.opacity = 0;
+            if (v.layer.shadowOpacity != 0) v.layer.shadowOpacity = 0;
         }
     }
 
