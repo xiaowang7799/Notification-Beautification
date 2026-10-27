@@ -15,6 +15,7 @@ static const void *kAxsLiquidSeenKey = &kAxsLiquidSeenKey;
 @property (nonatomic, strong) NSMutableArray<CALayer *> *fishLayers;  // 鱼缸游鱼
 @property (nonatomic, strong) NSMutableArray<NSNumber *> *fishNextBubble;  // 每条鱼的吐泡倒计时
 @property (nonatomic, assign) double fishSeed;   // 每条通知随机相位（鱼游互不同步）
+@property (nonatomic, assign) double particleJitter;   // 每条通知粒子发射率抖动（发射互不同步）
 @property (nonatomic, assign) double chargeNext; // 充电火花倒计时
 @property (nonatomic, strong) CAEmitterLayer *burst;       // 到达粒子爆发
 @property (nonatomic, strong) CAEmitterLayer *season;      // 季节粒子
@@ -273,6 +274,7 @@ static UIImageView *axs_notifyliquid_findIconView(UIView *view, int depth) {
     effect.fishLayers = [NSMutableArray array];
     effect.fishNextBubble = [NSMutableArray array];
     effect.fishSeed = (double)arc4random_uniform(10000) / 100.0;   // 随机相位：各通知鱼游互不同步
+    effect.particleJitter = 0.85 + ((double)arc4random() / UINT32_MAX) * 0.5;   // 发射率抖动 ±25%
     effect.chargeNext = 1.0;
     // 加载自定义鱼图（最多 6 张）。
     NSMutableArray<UIImage *> *customFish = [NSMutableArray array];
@@ -655,7 +657,7 @@ static UIImageView *axs_notifyliquid_findIconView(UIView *view, int depth) {
             double ang = t * 0.12;
             e.gradient.startPoint = CGPointMake(0.5 + 0.5 * cos(ang), 0.5 + 0.5 * sin(ang));
             e.gradient.endPoint = CGPointMake(0.5 - 0.5 * cos(ang), 0.5 - 0.5 * sin(ang));
-            double wave = (sin(t * gSpeed * 1.8) + 1.0) / 2.0;   // 0..1
+            double wave = (sin(t * gSpeed * 1.8 + e.fishSeed) + 1.0) / 2.0;   // 0..1（每条通知错相）
             double w1 = 0.18 + 0.22 * wave;                       // 中间两色位置推移
             e.gradient.locations = @[@0, @(w1), @(1.0 - w1), @1];
             e.gradient.colors = @[(id)c1.CGColor, (id)cm.CGColor, (id)c2.CGColor, (id)cm.CGColor];
@@ -827,8 +829,10 @@ static UIImageView *axs_notifyliquid_findIconView(UIView *view, int depth) {
                 for (UIImage *sp in sprites) {
                     CAEmitterCell *pCell = [CAEmitterCell emitterCell];
                     pCell.contents = (__bridge id)sp.CGImage;
-                    pCell.lifetime = 5.0f;
-                    pCell.velocity = 32.0f;
+                    // 独立随机种子：各通知发射图案不同步。
+                    pCell.seed = arc4random();
+                    pCell.lifetime = 4.6f + ((float)arc4random() / UINT32_MAX) * 1.2f;
+                    pCell.velocity = 28.0f + ((float)arc4random() / UINT32_MAX) * 10.0f;
                     pCell.velocityRange = 14.0f;
                     pCell.emissionLongitude = M_PI_2;   // 向下飘落
                     pCell.emissionRange = M_PI / 6.0;
@@ -843,7 +847,7 @@ static UIImageView *axs_notifyliquid_findIconView(UIView *view, int depth) {
             double pSize = [config axs_notifyliquid_particleSize];
             double density = [config axs_notifyliquid_particleDensity];
             NSArray<CAEmitterCell *> *cells = e.season.emitterCells;
-            float perRate = (float)(3.5 * density * (lowPower ? 0.4 : 1.0)
+            float perRate = (float)(3.5 * density * (lowPower ? 0.4 : 1.0) * e.particleJitter
                                     / (double)MAX((NSUInteger)1, cells.count));
             double pLongitude = (pDir == 1) ? -M_PI_2 : ((pDir == 2) ? 0.0 : M_PI_2);
             double pRange = (pDir == 3) ? M_PI * 2 : M_PI / 6.0;   // 多向 = 全方向发散
@@ -854,7 +858,7 @@ static UIImageView *axs_notifyliquid_findIconView(UIView *view, int depth) {
                 pc.scaleRange = (float)(0.2 * pSize);
                 pc.emissionLongitude = pLongitude;
                 pc.emissionRange = pRange;
-                pc.velocity = pVelocity;
+                pc.velocity = (float)(pVelocity * e.particleJitter);   // 各通知速度不同步
             }
         } else if (e.season.opacity != 0) {
             e.season.opacity = 0;
