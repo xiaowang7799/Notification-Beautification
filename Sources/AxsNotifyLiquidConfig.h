@@ -22,9 +22,6 @@
 - (BOOL)axs_notifyliquid_fishOn;
 - (NSInteger)axs_notifyliquid_fishCount;
 - (double)axs_notifyliquid_fishSize;
-// 界面净化：隐藏「通知中心」标题字、隐藏「清除所有通知」按钮。
-- (BOOL)axs_notifyliquid_hideNcTitle;
-- (BOOL)axs_notifyliquid_hideClearAll;
 // 配色来源：0=手动双色 1=跟随应用图标 2=跟随壁纸。
 - (NSInteger)axs_notifyliquid_colorSource;
 // 深色模式自动压暗。

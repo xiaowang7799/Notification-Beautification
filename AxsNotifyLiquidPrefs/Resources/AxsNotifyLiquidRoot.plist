@@ -30,26 +30,6 @@
 
         <dict>
             <key>cell</key><string>PSGroupCell</string>
-            <key>label</key><string>界面净化</string>
-            <key>footerText</key><string>隐藏 iOS 自带的「通知中心」标题文字与「清除所有通知」按钮（改完 respring 生效）。</string>
-        </dict>
-        <dict>
-            <key>cell</key><string>PSSwitchCell</string>
-            <key>label</key><string>隐藏「通知中心」标题</string>
-            <key>key</key><string>hide_nc_title</string>
-            <key>defaults</key><string>com.axs.notifyliquid</string>
-            <key>default</key><true/>
-        </dict>
-        <dict>
-            <key>cell</key><string>PSSwitchCell</string>
-            <key>label</key><string>隐藏「清除所有通知」按钮</string>
-            <key>key</key><string>hide_clear_all</string>
-            <key>defaults</key><string>com.axs.notifyliquid</string>
-            <key>default</key><true/>
-        </dict>
-
-        <dict>
-            <key>cell</key><string>PSGroupCell</string>
             <key>label</key><string>鱼缸游鱼</string>
             <key>footerText</key><string>每条通知背景里游动的小鱼，数量/大小可调。</string>
         </dict>

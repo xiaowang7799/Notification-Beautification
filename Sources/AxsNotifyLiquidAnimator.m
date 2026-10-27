@@ -365,28 +365,39 @@ static UIImageView *axs_notifyliquid_findIconView(UIView *view, int depth) {
     [self axs_notifyliquid_refreshForView:view];
     [self axs_notifyliquid_ensureLink];
 
-    // 到达粒子爆发：一次性播放（强度控制规模）。
+    // 到达粒子爆发：一次性播放。延迟 0.1s 等布局完成，按实际 bounds 中心发射
+    //（挂载瞬间 bounds 可能还是零，之前光斑会跑到左上角图标处）。
     if ([config axs_notifyliquid_burstOn] && !effect.burstPlayed) {
         effect.burstPlayed = YES;
         double bi = [config axs_notifyliquid_burstIntensity];
-        effect.burst.opacity = 1.0f;
-        CAEmitterCell *bc = effect.burst.emitterCells.firstObject;
-        if (bc) {
-            bc.birthRate = (float)(26.0 * bi);
-            bc.scale = (float)(0.35 * (0.7 + 0.3 * bi));
-            UIColor *source = effect.iconColor ?: [UIColor colorWithHue:0.6 saturation:0.7 brightness:1 alpha:1];
-            bc.color = source.CGColor;
-        }
         __weak AxsNotifyLiquidEffect *we = effect;
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.4 * NSEC_PER_SEC)),
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)),
                        dispatch_get_main_queue(), ^{
             AxsNotifyLiquidEffect *e = we;
-            if (e && e.burst) e.burst.birthRate = 0;   // 停止发射，余粒自消
-        });
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)),
-                       dispatch_get_main_queue(), ^{
-            AxsNotifyLiquidEffect *e = we;
-            if (e && e.burst) e.burst.opacity = 0;
+            UIView *ev = e.view;
+            if (!e || !ev || !e.burst) return;
+            e.burst.frame = ev.bounds;
+            e.burst.emitterPosition = CGPointMake(CGRectGetMidX(ev.bounds), CGRectGetMidY(ev.bounds));
+            e.burst.emitterSize = CGSizeMake(MAX(6.0, ev.bounds.size.width * 0.3),
+                                             MAX(6.0, ev.bounds.size.height * 0.3));
+            e.burst.opacity = 1.0f;
+            CAEmitterCell *bc = e.burst.emitterCells.firstObject;
+            if (bc) {
+                bc.birthRate = (float)(26.0 * bi);
+                bc.scale = (float)(0.35 * (0.7 + 0.3 * bi));
+                UIColor *source = e.iconColor ?: [UIColor colorWithHue:0.6 saturation:0.7 brightness:1 alpha:1];
+                bc.color = source.CGColor;
+            }
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.4 * NSEC_PER_SEC)),
+                           dispatch_get_main_queue(), ^{
+                AxsNotifyLiquidEffect *e2 = we;
+                if (e2 && e2.burst) e2.burst.birthRate = 0;
+            });
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)),
+                           dispatch_get_main_queue(), ^{
+                AxsNotifyLiquidEffect *e2 = we;
+                if (e2 && e2.burst) e2.burst.opacity = 0;
+            });
         });
     }
 }
@@ -414,6 +425,8 @@ static UIImageView *axs_notifyliquid_findIconView(UIView *view, int depth) {
         if (!v) return;
         e.gradient.frame = v.bounds;
         e.gradient.cornerRadius = v.layer.cornerRadius > 0 ? v.layer.cornerRadius : 24.0;
+        e.burst.frame = v.bounds;
+        e.burst.emitterPosition = CGPointMake(CGRectGetMidX(v.bounds), CGRectGetMidY(v.bounds));
         // 通知缩放（transform，布局后重施即自愈——frame 由系统管，transform 归我们）。
         double s = [config axs_notifyliquid_notifyScale];
         v.layer.transform = CATransform3DMakeScale(s, s, 1.0);
@@ -584,7 +597,8 @@ static UIImageView *axs_notifyliquid_findIconView(UIView *view, int depth) {
             CGFloat fishX = (CGFloat)(sin(phase) * b.size.width * 0.32) + CGRectGetMidX(b);
             CGFloat fishY = (CGFloat)(cos(phase * 0.7) * 7.0) + b.size.height * (0.40 + 0.09 * (fi % 3));
             fish.position = CGPointMake(fishX, fishY);
-            fish.transform = cos(phase) < 0 ? CATransform3DMakeScale(-1, 1, 1) : CATransform3DIdentity;
+            // 方向翻转：鱼图头朝左，向右游（cos>0）时镜像。
+            fish.transform = cos(phase) > 0 ? CATransform3DMakeScale(-1, 1, 1) : CATransform3DIdentity;
 
             // 鱼吐泡泡：倒计时到 0 时从嘴边冒一个泡泡，上浮渐隐后自清。
             if (fi < (NSInteger)e.fishNextBubble.count) {

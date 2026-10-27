@@ -110,12 +110,6 @@ static BOOL axs_notifyliquid_bool(id value, BOOL def) {
 - (double)axs_notifyliquid_fishSize {
     return axs_notifyliquid_clamped([self axs_notifyliquid_valueForKey:@"fish_size" defaultValue:nil], 1.0, 0.5, 2.0);
 }
-- (BOOL)axs_notifyliquid_hideNcTitle {
-    return axs_notifyliquid_bool([self axs_notifyliquid_valueForKey:@"hide_nc_title" defaultValue:nil], YES);
-}
-- (BOOL)axs_notifyliquid_hideClearAll {
-    return axs_notifyliquid_bool([self axs_notifyliquid_valueForKey:@"hide_clear_all" defaultValue:nil], YES);
-}
 - (NSInteger)axs_notifyliquid_colorSource {
     double d = axs_notifyliquid_clamped([self axs_notifyliquid_valueForKey:@"color_source" defaultValue:nil], 0.0, 0.0, 2.0);
     return (NSInteger)d;
