@@ -9,7 +9,6 @@
 @property (nonatomic, weak) UIView *view;
 @property (nonatomic, strong) CAGradientLayer *gradient;   // 流动渐变背景
 @property (nonatomic, strong) CAGradientLayer *glass;      // 流动高光
-@property (nonatomic, strong) CAShapeLayer *wave;          // 波浪边框
 @end
 @implementation AxsNotifyLiquidEffect
 @end
@@ -21,8 +20,7 @@
 @property (nonatomic, assign) NSUInteger frameCounter;
 @end
 
-// 波浪路径（定义见文件底部）。
-static UIBezierPath *axs_notifyliquid_wavePath(CGRect rect, CGFloat amp, double phase);
+// 波浪路径已移除（功能取消）。
 
 @implementation AxsNotifyLiquidAnimator
 
@@ -62,17 +60,18 @@ static UIBezierPath *axs_notifyliquid_wavePath(CGRect rect, CGFloat amp, double 
     CGFloat radius = view.layer.cornerRadius > 0 ? view.layer.cornerRadius : 24.0;
 
     // 流动渐变背景（横向往复的三段渐变，颜色随时间流动）。
+    // zPosition 10：必须浮在通知毛玻璃背景之上，否则被背景遮住（iOS 26 实测）。
     CAGradientLayer *gradient = [CAGradientLayer layer];
     gradient.frame = view.bounds;
     gradient.cornerRadius = radius;
     gradient.startPoint = CGPointMake(0, 0.5);
     gradient.endPoint = CGPointMake(1, 0.5);
     gradient.opacity = 0;
-    gradient.zPosition = -2;
+    gradient.zPosition = 10;
     [view.layer addSublayer:gradient];
     effect.gradient = gradient;
 
-    // 液态玻璃高光（斜向白色光带缓慢移动）。
+    // 液态玻璃高光（斜向白色光带缓慢移动，同样浮在上层）。
     CAGradientLayer *glass = [CAGradientLayer layer];
     glass.frame = view.bounds;
     glass.cornerRadius = radius;
@@ -83,19 +82,9 @@ static UIBezierPath *axs_notifyliquid_wavePath(CGRect rect, CGFloat amp, double 
                      (id)[UIColor clearColor].CGColor];
     glass.locations = @[@0, @0.5, @1];
     glass.opacity = 0;
-    glass.zPosition = -1;
+    glass.zPosition = 11;
     [view.layer addSublayer:glass];
     effect.glass = glass;
-
-    // 波浪边框。
-    CAShapeLayer *wave = [CAShapeLayer layer];
-    wave.frame = view.bounds;
-    wave.fillColor = [UIColor clearColor].CGColor;
-    wave.lineWidth = 2.0;
-    wave.opacity = 0;
-    wave.zPosition = 5;
-    [view.layer addSublayer:wave];
-    effect.wave = wave;
 
     [self.effects addObject:effect];
 
@@ -125,7 +114,6 @@ static UIBezierPath *axs_notifyliquid_wavePath(CGRect rect, CGFloat amp, double 
         if (e.view == view || e.view == nil) {
             [e.gradient removeFromSuperlayer];
             [e.glass removeFromSuperlayer];
-            [e.wave removeFromSuperlayer];
             [self.effects removeObjectAtIndex:(NSUInteger)i];
         }
     }
@@ -144,7 +132,6 @@ static UIBezierPath *axs_notifyliquid_wavePath(CGRect rect, CGFloat amp, double 
         e.gradient.cornerRadius = radius;
         e.glass.frame = v.bounds;
         e.glass.cornerRadius = radius;
-        e.wave.frame = v.bounds;
         // 通知缩放（transform，布局后重施即自愈——frame 由系统管，transform 归我们）。
         double s = [config axs_notifyliquid_notifyScale];
         v.layer.transform = CATransform3DMakeScale(s, s, 1.0);
@@ -181,14 +168,11 @@ static UIBezierPath *axs_notifyliquid_wavePath(CGRect rect, CGFloat amp, double 
 
     BOOL gradientOn = [config axs_notifyliquid_gradientOn];
     BOOL glassOn = [config axs_notifyliquid_glassOn];
-    BOOL waveOn = [config axs_notifyliquid_waveOn];
     double gSpeed = [config axs_notifyliquid_gradientSpeed];
     double gOpacity = [config axs_notifyliquid_gradientOpacity];
     double hue1 = [config axs_notifyliquid_gradientHue1];
     double hue2 = [config axs_notifyliquid_gradientHue2];
     double glassIntensity = [config axs_notifyliquid_glassIntensity];
-    double waveAmp = [config axs_notifyliquid_waveAmplitude];
-    double waveSpeed = [config axs_notifyliquid_waveSpeed];
 
     for (NSInteger i = (NSInteger)self.effects.count - 1; i >= 0; i--) {
         AxsNotifyLiquidEffect *e = self.effects[(NSUInteger)i];
@@ -196,7 +180,6 @@ static UIBezierPath *axs_notifyliquid_wavePath(CGRect rect, CGFloat amp, double 
         if (!v) {
             [e.gradient removeFromSuperlayer];
             [e.glass removeFromSuperlayer];
-            [e.wave removeFromSuperlayer];
             [self.effects removeObjectAtIndex:(NSUInteger)i];
             continue;
         }
@@ -210,32 +193,23 @@ static UIBezierPath *axs_notifyliquid_wavePath(CGRect rect, CGFloat amp, double 
             e.gradient.colors = @[(id)c1.CGColor, (id)cm.CGColor, (id)c2.CGColor];
             double travel = (sin(t * gSpeed * 2.0) + 1.0) / 2.0;   // 0..1 往复
             double span = 0.25;
-            e.gradient.locations = @[@(travel * (1.0 - span)),
-                                     @(travel * (1.0 - span) + span / 2.0),
-                                     @(travel * (1.0 - span) + span)];
+            double l0 = fmax(0.0, fmin(1.0, travel * (1.0 - span)));
+            double l2 = fmax(0.0, fmin(1.0, l0 + span));
+            e.gradient.locations = @[@(l0), @((l0 + l2) / 2.0), @(l2)];
         } else if (e.gradient.opacity != 0) {
             e.gradient.opacity = 0;
         }
 
-        // 液态玻璃高光：光带位置缓慢往复。
+        // 液态玻璃高光：光带位置缓慢往复（locations 必须钳制在 [0,1]，越界 CA 不渲染）。
         if (glassOn) {
             e.glass.opacity = (float)(0.8 * glassIntensity);
-            double pos = (sin(t * 0.5) + 1.0) / 2.0;
-            e.glass.locations = @[@(pos - 0.25), @(pos), @(pos + 0.25)];
+            double pos = (sin(t * 0.5) + 1.0) / 2.0;   // 0..1
+            double w = 0.25;
+            double g0 = fmax(0.0, fmin(1.0, pos - w));
+            double g2 = fmax(0.0, fmin(1.0, pos + w));
+            e.glass.locations = @[@(g0), @(pos), @(g2)];
         } else if (e.glass.opacity != 0) {
             e.glass.opacity = 0;
-        }
-
-        // 波浪边缘：矩形四边叠加正弦波动（每 2 帧更新 path 省开销）。
-        if (waveOn) {
-            e.wave.opacity = 1.0f;
-            if ((self.frameCounter % 2) == 0) {
-                e.wave.path = axs_notifyliquid_wavePath(v.bounds, waveAmp, t * waveSpeed * 2.0).CGPath;
-                e.wave.strokeColor = [UIColor colorWithHue:(CGFloat)fmod(0.55 + t * 0.03, 1.0)
-                                               saturation:0.7 brightness:1 alpha:0.8].CGColor;
-            }
-        } else if (e.wave.opacity != 0) {
-            e.wave.opacity = 0;
         }
     }
 
@@ -249,38 +223,3 @@ static UIBezierPath *axs_notifyliquid_wavePath(CGRect rect, CGFloat amp, double 
 }
 
 @end
-
-#pragma mark - 波浪路径（圆角矩形四边叠加正弦波动）
-
-static UIBezierPath *axs_notifyliquid_wavePath(CGRect rect, CGFloat amp, double phase) {
-    UIBezierPath *path = [UIBezierPath bezierPath];
-    NSInteger n = 10;
-    CGFloat w = rect.size.width, h = rect.size.height;
-    // 上边（左→右）
-    [path moveToPoint:CGPointMake(0, amp)];
-    for (NSInteger i = 1; i <= n; i++) {
-        CGFloat x = w * i / n;
-        CGFloat y = amp + (CGFloat)(sin(phase + i * 0.7) * amp);
-        [path addLineToPoint:CGPointMake(x, y)];
-    }
-    // 右边（上→下）
-    for (NSInteger i = 1; i <= n; i++) {
-        CGFloat y = h * i / n;
-        CGFloat x = w - amp + (CGFloat)(sin(phase + 1.6 + i * 0.7) * amp);
-        [path addLineToPoint:CGPointMake(x, y)];
-    }
-    // 下边（右→左）
-    for (NSInteger i = 1; i <= n; i++) {
-        CGFloat x = w * (n - i) / n;
-        CGFloat y = h - amp + (CGFloat)(sin(phase + 3.2 + i * 0.7) * amp);
-        [path addLineToPoint:CGPointMake(x, y)];
-    }
-    // 左边（下→上）
-    for (NSInteger i = 1; i <= n; i++) {
-        CGFloat y = h * (n - i) / n;
-        CGFloat x = amp + (CGFloat)(sin(phase + 4.8 + i * 0.7) * amp);
-        [path addLineToPoint:CGPointMake(x, y)];
-    }
-    [path closePath];
-    return path;
-}

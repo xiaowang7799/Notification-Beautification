@@ -19,10 +19,6 @@
 // 液态玻璃质感（流动高光）。
 - (BOOL)axs_notifyliquid_glassOn;
 - (double)axs_notifyliquid_glassIntensity;
-// 波浪边缘。
-- (BOOL)axs_notifyliquid_waveOn;
-- (double)axs_notifyliquid_waveAmplitude;
-- (double)axs_notifyliquid_waveSpeed;
 // Generic accessors.
 - (id)axs_notifyliquid_valueForKey:(NSString *)key defaultValue:(id)defaultValue;
 - (void)axs_notifyliquid_reload;

@@ -98,15 +98,6 @@ static BOOL axs_notifyliquid_bool(id value, BOOL def) {
 - (double)axs_notifyliquid_glassIntensity {
     return axs_notifyliquid_clamped([self axs_notifyliquid_valueForKey:@"glass_intensity" defaultValue:nil], 0.6, 0.1, 1.0);
 }
-- (BOOL)axs_notifyliquid_waveOn {
-    return axs_notifyliquid_bool([self axs_notifyliquid_valueForKey:@"wave_on" defaultValue:nil], NO);
-}
-- (double)axs_notifyliquid_waveAmplitude {
-    return axs_notifyliquid_clamped([self axs_notifyliquid_valueForKey:@"wave_amplitude" defaultValue:nil], 1.5, 0.2, 6.0);
-}
-- (double)axs_notifyliquid_waveSpeed {
-    return axs_notifyliquid_clamped([self axs_notifyliquid_valueForKey:@"wave_speed" defaultValue:nil], 1.0, 0.1, 3.0);
-}
 
 - (void)dealloc {
     CFNotificationCenterRemoveEveryObserver(CFNotificationCenterGetDarwinNotifyCenter(),
